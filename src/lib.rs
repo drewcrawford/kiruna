@@ -1,4 +1,5 @@
 mod sync_task;
+mod sync_spawner;
 
 #[cfg(test)]
 mod tests {
