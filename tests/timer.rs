@@ -3,7 +3,6 @@ use std::task::{Waker, Context, Poll};
 use std::pin::Pin;
 use std::time::Duration;
 use std::thread::{spawn, sleep};
-use std::mem::MaybeUninit;
 use std::sync::{Arc, Mutex};
 
 struct SharedState {
@@ -37,7 +36,6 @@ impl TimerFuture {
             completed: false,
             waker: None
         }));
-        let move_duration = duration.clone();
         let cloned_state = shared_state.clone();
         spawn(move || {
             let mut shared_state = cloned_state.lock().unwrap();
@@ -54,7 +52,7 @@ impl TimerFuture {
 
 #[test]
 fn timer() {
-    let mut future = TimerFuture::new(Duration::from_secs(1));
+    let future = TimerFuture::new(Duration::from_secs(1));
     while !future.shared_state.lock().unwrap().completed {
         //spin
     }
