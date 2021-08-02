@@ -4,6 +4,7 @@ use crate::sync_task::{SyncTask, SyncWake, ChannelFactory};
 use std::task::{Waker, Context};
 use std::sync::Arc;
 
+///Main executor
 pub struct SyncExecutor {
     channel: Receiver<SyncExecutorHandle>,
     spawner: ChannelFactory,
@@ -16,6 +17,7 @@ pub struct SyncExecutor {
 pub(crate) struct SyncExecutorHandle(u16);
 
 impl SyncExecutor {
+    ///Creates a new executor
     pub fn new() -> Self {
         let (sender, receiver) = channel();
         let local_spawner = sender.clone();
@@ -28,6 +30,7 @@ impl SyncExecutor {
             num_active: 0
         }
     }
+    ///Spawns the task onto the executor.
     pub fn spawn(&mut self, future: impl Future<Output=()>+ 'static) {
         let new_handle = SyncExecutorHandle(self.tasks.len() as u16);
         let task = SyncTask::new(future);
@@ -35,6 +38,9 @@ impl SyncExecutor {
         self.num_active += 1;
         self.local_spawner.send(new_handle).unwrap();
     }
+    ///Drains the executor.  After this call, the executor can no longer be used.
+    ///
+    /// This function will return when all spawned tasks complete.
     pub fn drain(mut self) {
         while let Ok(wakeup) = self.channel.recv() {
             let task = self.tasks[wakeup.0 as usize].as_ref().unwrap();
