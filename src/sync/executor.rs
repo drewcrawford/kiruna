@@ -1,28 +1,28 @@
 use std::future::{Future};
 use std::sync::mpsc::{Receiver, channel, Sender};
-use crate::sync_task::{SyncTask, SyncWake, ChannelFactory};
+use crate::sync::task::{Task, Wake, ChannelFactory};
 use std::task::{Waker, Context};
 use std::sync::Arc;
 
 ///Main executor
-pub struct SyncExecutor {
-    channel: Receiver<SyncExecutorHandle>,
+pub struct Executor {
+    channel: Receiver<Handle>,
     spawner: ChannelFactory,
-    local_spawner: Sender<SyncExecutorHandle>,
-    tasks: Vec<Option<SyncTask>>,
+    local_spawner: Sender<Handle>,
+    tasks: Vec<Option<Task>>,
     num_active: u16,
 }
 
 #[derive(Copy,Clone)]
-pub(crate) struct SyncExecutorHandle(u16);
+pub(crate) struct Handle(u16);
 
-impl SyncExecutor {
+impl Executor {
     ///Creates a new executor
     pub fn new() -> Self {
         let (sender, receiver) = channel();
         let local_spawner = sender.clone();
         let factory = unsafe{ ChannelFactory::new(sender)};
-        SyncExecutor {
+        Executor {
             channel: receiver,
             spawner: factory,
             local_spawner,
@@ -32,8 +32,8 @@ impl SyncExecutor {
     }
     ///Spawns the task onto the executor.
     pub fn spawn(&mut self, future: impl Future<Output=()>+ 'static) {
-        let new_handle = SyncExecutorHandle(self.tasks.len() as u16);
-        let task = SyncTask::new(future);
+        let new_handle = Handle(self.tasks.len() as u16);
+        let task = Task::new(future);
         self.tasks.push(Some(task));
         self.num_active += 1;
         self.local_spawner.send(new_handle).unwrap();
@@ -44,7 +44,7 @@ impl SyncExecutor {
     pub fn drain(mut self) {
         while let Ok(wakeup) = self.channel.recv() {
             let task = self.tasks[wakeup.0 as usize].as_ref().unwrap();
-            let sync_wake = SyncWake::new(wakeup, self.spawner.clone());
+            let sync_wake = Wake::new(wakeup, self.spawner.clone());
             let as_waker: Waker = Arc::new(sync_wake).into();
             let mut context = Context::from_waker(&as_waker);
             //safe because it's always called from this thread

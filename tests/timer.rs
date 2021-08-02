@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::time::Duration;
 use std::thread::{spawn, sleep};
 use std::sync::{Arc, Mutex};
-use kiruna::SyncExecutor;
+use kiruna::Executor;
 
 struct SharedState {
     completed: bool,
@@ -65,7 +65,7 @@ impl Drop for TimerFuture {
 
 #[test]
 fn timer() {
-    let mut executor = SyncExecutor::new();
+    let mut executor = Executor::new();
     {
         let future = TimerFuture::new(Duration::from_secs(1));
         executor.spawn(future);

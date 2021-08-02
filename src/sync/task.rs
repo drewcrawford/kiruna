@@ -1,19 +1,19 @@
 use std::future::{Future};
 use std::cell::UnsafeCell;
-use std::task::{Wake, Context, Poll};
+use std::task::{Context, Poll};
 use std::sync::{Arc};
 use std::pin::Pin;
 use std::sync::mpsc::{Sender};
-use crate::sync_executor::SyncExecutorHandle;
+use super::executor::Handle;
 
 ///Top-level future
-pub(crate) struct SyncTask {
+pub(crate) struct Task {
     future: UnsafeCell<Pin<Box<dyn Future<Output=()>>>>,
 }
 
-impl SyncTask {
+impl Task {
     pub(crate) fn new<F: Future<Output=()> + 'static>(future: F) -> Self {
-        SyncTask {
+        Task {
             future: UnsafeCell::new(Box::pin(future
             )),
         }
@@ -30,38 +30,38 @@ impl SyncTask {
 ///
 /// To use this correctly, you must pass an unused channel into this type.
 #[derive(Clone)]
-pub struct ChannelFactory {
-    inner: Sender<SyncExecutorHandle>
+pub(crate) struct ChannelFactory {
+    inner: Sender<Handle>
 }
 
 unsafe impl Send for ChannelFactory {}
 unsafe impl Sync for ChannelFactory {}
 impl ChannelFactory {
     ///Safety: pass an unused channel in here
-    pub(crate) unsafe fn new(channel: Sender<SyncExecutorHandle>) -> ChannelFactory {
+    pub(crate) unsafe fn new(channel: Sender<Handle>) -> ChannelFactory {
         ChannelFactory {
             inner: channel
         }
     }
 }
 impl ChannelFactory {
-    fn new_channel(&self) -> Sender<SyncExecutorHandle> {
+    fn new_channel(&self) -> Sender<Handle> {
         self.inner.clone()
     }
 }
-pub(crate) struct SyncWake {
-    handle: SyncExecutorHandle,
+pub(crate) struct Wake {
+    handle: Handle,
     channel: ChannelFactory
 }
-impl SyncWake {
-    pub(crate) fn new(handle: SyncExecutorHandle, channel_factory: ChannelFactory) -> SyncWake {
-        SyncWake {
+impl Wake {
+    pub(crate) fn new(handle: Handle, channel_factory: ChannelFactory) -> Wake {
+        Wake {
             handle: handle,
             channel: channel_factory
         }
     }
 }
-impl Wake for SyncWake {
+impl std::task::Wake for Wake {
     fn wake(self: Arc<Self>) {
         self.channel.new_channel().send(self.handle).unwrap();
     }
