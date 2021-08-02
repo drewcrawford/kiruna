@@ -1,5 +1,7 @@
 mod sync_task;
-mod sync_spawner;
+mod sync_executor;
+
+pub use sync_executor::SyncExecutor;
 
 #[cfg(test)]
 mod tests {
