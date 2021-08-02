@@ -57,14 +57,21 @@ impl TimerFuture {
         }
     }
 }
+impl Drop for TimerFuture {
+    fn drop(&mut self) {
+        println!("Drop TimerFuture");
+    }
+}
 
 #[test]
 fn timer() {
-    let executor = SyncExecutor::new();
+    let mut executor = SyncExecutor::new();
     {
         let future = TimerFuture::new(Duration::from_secs(1));
         executor.spawn(future);
     }
+    {
+        executor.drain();
 
-    executor.drain();
+    }
 }
