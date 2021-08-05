@@ -3,8 +3,10 @@ Kiruna is a simple async runtime in a few hundred lines of code.  It's designed 
 
 Kiruna is also a remote town in the arctic circle.  Programs using it will be cold, beautiful, and isolated from more popular async runtimes.
 
-# Executor
+# Features
+By default, Kira does nothing.  To use stuff, enable specific features:
+* `sync`: An executor for a single thread
+* `react`: A reactor.  This requires one or more backends,
+    * `react-kqueue`, a kqueue backend
 
-Currently Kiruna provides one local executor, `sync::Executor`.  This executor runs on a single thread, although it can poll operations that run concurrently.  This is a typical pattern for async code, and in many workloads is the fastest architecture.
 
-In the future, other executors may be implemented, probably behind feature flags.

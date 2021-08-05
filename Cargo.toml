@@ -6,4 +6,18 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+sync = []
+#use the kqueue reactor
+react_kqueue = ["react_kqueue_available","react_kqueue_default"]
+
+#subfeatures used to toggle building and defaults separately
+react_kqueue_available=["libc","once_cell"]
+react_kqueue_default=[]
+
 [dependencies]
+libc = {version = "0.2.98", optional = true}
+once_cell = {version = "1.8.0", optional = true}
+
+
+

@@ -1,3 +1,4 @@
+#![cfg(feature="sync")]
 use std::future::Future;
 use std::task::{Waker, Context, Poll};
 use std::pin::Pin;
