@@ -9,3 +9,6 @@ mod react;
 
 #[cfg(test)]
 mod fake_waker;
+
+#[cfg(feature="io_stream")]
+mod io;

@@ -10,10 +10,12 @@ edition = "2018"
 sync = []
 #use the kqueue reactor
 react_kqueue = ["react_kqueue_available","react_kqueue_default"]
+#Provide support for io::stream
+io_stream = ["react_kqueue_default"]
 
 #subfeatures used to toggle building and defaults separately
 react_kqueue_available=["libc","once_cell"]
-react_kqueue_default=[]
+react_kqueue_default=["react_kqueue_available"]
 
 [dependencies]
 libc = {version = "0.2.98", optional = true}
