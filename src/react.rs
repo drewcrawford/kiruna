@@ -1,6 +1,3 @@
 mod common;
-#[cfg(feature="react_kqueue_available")]
-mod kqueue;
-
-#[cfg(feature="react_kqueue_default")]
-pub use kqueue::KqueueReactor as Reactor;
+#[cfg(feature = "react_dispatch")]
+mod dispatch;

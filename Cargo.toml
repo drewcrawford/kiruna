@@ -8,18 +8,14 @@ edition = "2018"
 
 [features]
 sync = []
-#use the kqueue reactor
-react_kqueue = ["react_kqueue_available","react_kqueue_default"]
-#Provide support for io::stream
-io_stream = ["react_kqueue_default"]
-
-#subfeatures used to toggle building and defaults separately
-react_kqueue_available=["libc","once_cell"]
-react_kqueue_default=["react_kqueue_available"]
+react = []
+io_stream = []
+react_dispatch = ["dispatchr"]
+stream_with_dispatch = ["io_stream","react_dispatch"]
 
 [dependencies]
-libc = {version = "0.2.98", optional = true}
-once_cell = {version = "1.8.0", optional = true}
+dispatchr = {path = "../dispatchr", optional=true}
+
 
 
 

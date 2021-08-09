@@ -1,7 +1,6 @@
 use std::task::{Wake, Poll, Waker, Context};
 use std::sync::Arc;
 use std::future::Future;
-use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 //fake waker purely for debug purposes

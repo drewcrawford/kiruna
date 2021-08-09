@@ -4,7 +4,7 @@ mod sync;
 #[cfg(feature="sync")]
 pub use sync::executor::Executor;
 
-#[cfg(feature="react_kqueue_available")]
+#[cfg(feature="react_dispatch")]
 mod react;
 
 #[cfg(test)]
