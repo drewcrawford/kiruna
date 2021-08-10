@@ -9,9 +9,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll, Waker};
 use dispatchr::io::{read, dispatch_fd_t};
-use dispatchr::queue::{Unmanaged, global};
-use std::sync::Mutex;
-use dispatchr::QoS;
+use dispatchr::queue::{Unmanaged};
+use std::sync::{Mutex, Arc};
 
 ///Buffer type.
 ///
@@ -19,7 +18,7 @@ use dispatchr::QoS;
 #[derive(Debug)]
 pub struct Buffer(Contiguous);
 impl Buffer {
-    fn as_slice(&self) -> &[u8] {
+    pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
     }
 }
@@ -40,13 +39,13 @@ pub struct DispatchBufferFuture {
     fd: dispatch_fd_t,
     size: usize,
     queue: Unmanaged,
-    result: Mutex<DispatchFutureResult>,
+    result: Arc<Mutex<DispatchFutureResult>>,
     started: bool
 }
 impl Future for DispatchBufferFuture {
     type Output = Buffer;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let result = self.result.lock().unwrap().result.take();
         if let Some(buffer) = result {
             Poll::Ready(buffer)
@@ -56,14 +55,18 @@ impl Future for DispatchBufferFuture {
             //set new waker
             self.result.lock().as_mut().unwrap().waker = Some(cx.waker().clone());
             if !self.started {
-                read(self.fd, self.size, self.queue.clone(), |a,b| {
-                    let mut lock = self.result.lock().unwrap();
+                //this needs to be set up front to guarantee that we don't get another call
+                {
+                    self.started = true;
+                }
+                let capture_arc = self.result.clone();
+                read(self.fd, self.size, self.queue.clone(), move |a,b| {
+                    let mut lock = capture_arc.lock().unwrap();
                     if b == 0 {
                         lock.result = Some(Buffer(a.into_contiguous()));
                     }
                     lock.waker.take().unwrap().wake();
                 });
-                self.get_mut().started = true;
             }
             Poll::Pending
         }
@@ -71,9 +74,17 @@ impl Future for DispatchBufferFuture {
     }
 }
 
+#[derive(Clone)]
 pub struct OSReadOptions {
     ///Queue (QoS) for performing I/O
     queue: Unmanaged
+}
+impl OSReadOptions {
+    pub fn new(queue: Unmanaged) -> OSReadOptions {
+        OSReadOptions {
+            queue: queue
+        }
+    }
 }
 
 
@@ -90,7 +101,7 @@ impl Read {
             fd: dispatch_fd_t::new(self.fd),
             size: usize::MAX,
             queue: os_read_options.queue,
-            result: Mutex::new(DispatchFutureResult { waker: None, result: None }),
+            result: Arc::new(Mutex::new(DispatchFutureResult { waker: None, result: None })),
             started: false
         }
     }
@@ -99,11 +110,11 @@ impl Read {
 }
 
 #[test] fn test() {
-    use crate::fake_waker::toy_await;
+    use crate::test::test_await;
     use std::time::Duration;
     let path = std::path::Path::new("src/io/stream.rs");
     let file = std::fs::File::open(path).unwrap();
     let read = Read::new(file);
-    let buffer = toy_await(read.all(OSReadOptions{queue: global(QoS::UserInitiated)}),Duration::from_secs(2));
+    let buffer = test_await(read.all(OSReadOptions{queue: global(QoS::UserInitiated)}), Duration::from_secs(2));
     assert!(buffer.as_slice().starts_with("// FIND-ME".as_bytes()));
 }

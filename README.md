@@ -6,7 +6,8 @@ Kiruna is also a remote town in the arctic circle.  Programs using it will be co
 # Features
 By default, Kira does nothing.  To use stuff, enable specific features:
 * `sync`: An executor for a single thread
-* `react`: A reactor.  This requires one or more backends,
-    * `react-kqueue`, a kqueue backend
+* `test`: An executor designed for tests.
+* `io_stream`: io::stream features.  Requires one of
+  * `io_stream_dispatch`: Stream with libdispatch
 
 

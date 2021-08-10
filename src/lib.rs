@@ -7,8 +7,8 @@ pub use sync::executor::Executor;
 #[cfg(feature="react_dispatch")]
 mod react;
 
-#[cfg(test)]
-mod fake_waker;
+#[cfg(any(test,feature="test"))]
+pub mod test;
 
 #[cfg(feature="io_stream")]
-mod io;
+pub mod io;

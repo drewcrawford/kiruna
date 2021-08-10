@@ -21,4 +21,4 @@ Note that, files do not cleanly map to seek, nor do network requests cleanly map
 
 */
 #[cfg(feature="io_stream")]
-mod stream;
+pub mod stream;

@@ -11,12 +11,13 @@ impl Wake for FakeWaker {
     }
 }
 impl FakeWaker {
+    #[cfg(test)]
     pub fn new_waker() -> Waker {
         Arc::new(FakeWaker).into()
     }
 }
-
-pub fn toy_poll<F: Future>(future: F) -> Poll::<F::Output> {
+#[cfg(test)]
+pub(crate) fn toy_poll<F: Future>(future: F) -> Poll::<F::Output> {
     //println!("await {:?}",self.0);
     let fake_waker = Arc::new(FakeWaker);
     let as_waker: Waker = fake_waker.into();
@@ -24,7 +25,8 @@ pub fn toy_poll<F: Future>(future: F) -> Poll::<F::Output> {
     Box::pin(future).as_mut().poll(&mut as_context)
 }
 
-pub fn toy_await<F: Future>(future: F, timeout: Duration) -> F::Output{
+///A very silly executor designed for tests.
+pub fn test_await<F: Future>(future: F, timeout: Duration) -> F::Output{
     let fake_waker = Arc::new(FakeWaker);
     let as_waker: Waker = fake_waker.into();
     let mut as_context = Context::from_waker(&as_waker);

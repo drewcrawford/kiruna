@@ -10,6 +10,8 @@ edition = "2018"
 sync = []
 react = []
 io_stream = []
+# enable test_await fn
+test = []
 react_dispatch = ["dispatchr"]
 stream_with_dispatch = ["io_stream","react_dispatch"]
 
