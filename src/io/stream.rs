@@ -111,6 +111,8 @@ impl Read {
 
 #[test] fn test() {
     use crate::test::test_await;
+    use dispatchr::QoS;
+    use dispatchr::queue::global;
     use std::time::Duration;
     let path = std::path::Path::new("src/io/stream.rs");
     let file = std::fs::File::open(path).unwrap();
