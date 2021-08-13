@@ -21,6 +21,9 @@ impl Buffer {
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
     }
+    pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
+        self.0.as_dispatch_data()
+    }
 }
 
 ///Reads from a file descriptor
@@ -63,7 +66,7 @@ impl Future for DispatchBufferFuture {
                 read(self.fd, self.size, self.queue.clone(), move |a,b| {
                     let mut lock = capture_arc.lock().unwrap();
                     if b == 0 {
-                        lock.result = Some(Buffer(a.into_contiguous()));
+                        lock.result = Some(Buffer(a.as_contiguous()));
                     }
                     lock.waker.take().unwrap().wake();
                 });
