@@ -15,7 +15,7 @@ pub struct OSReadOptions<'a> {
 impl<'a> OSReadOptions<'a> {
     pub fn new(queue: &'a dispatchr::queue::Unmanaged) -> Self {
         OSReadOptions {
-            queue: queue
+            queue
         }
     }
 }
@@ -32,14 +32,14 @@ struct DispatchFutureResult {
 }
 
 ///Future for dispatch_read
-pub struct DispatchBufferFuture<'a> {
+pub struct DispatchReadFuture<'a> {
     fd: dispatch_fd_t,
     size: usize,
     queue: &'a dispatchr::queue::Unmanaged,
     result: Arc<Mutex<DispatchFutureResult>>,
     started: bool
 }
-impl<'a> Future for DispatchBufferFuture<'a> {
+impl<'a> Future for DispatchReadFuture<'a> {
     type Output = Buffer;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -79,8 +79,8 @@ impl Read {
     }
 
     ///Reads the entire fd into memory
-    pub fn all<'a>(&self, os_read_options: OSReadOptions<'a>) -> DispatchBufferFuture<'a> {
-        DispatchBufferFuture {
+    pub fn all<'a>(&self, os_read_options: OSReadOptions<'a>) -> DispatchReadFuture<'a> {
+        DispatchReadFuture {
             fd: dispatch_fd_t::new(self.fd),
             size: usize::MAX,
             queue: os_read_options.queue,
