@@ -7,12 +7,12 @@ use std::sync::mpsc::{Sender};
 use super::executor::Handle;
 
 ///Top-level future
-pub(crate) struct Task {
-    future: UnsafeCell<Pin<Box<dyn Future<Output=()>>>>,
+pub(crate) struct Task<'a> {
+    future: UnsafeCell<Pin<Box<dyn Future<Output=()> + 'a>>>,
 }
 
-impl Task {
-    pub(crate) fn new<F: Future<Output=()> + 'static>(future: F) -> Self {
+impl<'a> Task<'a> {
+    pub(crate) fn new<F: Future<Output=()> + 'a>(future: F) -> Self {
         Task {
             future: UnsafeCell::new(Box::pin(future
             )),
