@@ -7,7 +7,8 @@ use std::task::{Context, Poll, Waker};
 use std::sync::{Mutex, Arc};
 use dispatchr::io::dispatch_fd_t;
 use dispatchr::data::DispatchData;
-use crate::io::stream::OSError;
+use crate::io::stream::{OSError};
+use crate::Priority;
 
 pub struct Write {
     fd: RawFd
@@ -16,12 +17,25 @@ pub struct Write {
 ///Fast path for static data
 struct StaticBuffer(&'static [u8]);
 
+
 impl HasMemory for StaticBuffer {
     fn as_slice(&self) -> &[u8] {
         self.0
     }
 }
 
+struct BoxedBuffer(Box<[u8]>);
+impl HasMemory for BoxedBuffer {
+    fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+///Backend-specific write options.  On macOS, you may target a specific queue
+/// for the reply to write calls.
+///
+/// For cases where you intend to target a global queue, it may be more convenient to use [Priority] instead, which
+/// is convertible (often, implicitly) to this type.
 pub struct OSWriteOptions<'a> {
     queue: &'a Unmanaged
 }
@@ -29,6 +43,14 @@ impl<'a> OSWriteOptions<'a> {
     pub fn new(queue: &'a Unmanaged) -> OSWriteOptions {
         OSWriteOptions {
             queue
+        }
+    }
+}
+impl From<Priority> for OSWriteOptions<'static> {
+    fn from(priority: Priority) -> Self {
+        let queue = dispatchr::queue::global(priority.as_qos()).unwrap();
+        OSWriteOptions {
+            queue: queue
         }
     }
 }
@@ -89,17 +111,26 @@ impl Write {
             fd: fd.into_raw_fd()
         }
     }
-    ///A fast path to write static data.
-    pub fn write_static<'a>(&self, buffer: &'static [u8], write_options: OSWriteOptions<'a>) -> impl Future<Output=Result<(),OSError>> + 'a {
-        let buffer = ExternalMemory::new(StaticBuffer(buffer), write_options.queue);
-        let future = WriteFuture {
+    fn write_data<'a>(&self, buffer: ExternalMemory, write_options: OSWriteOptions<'a>) -> impl Future<Output=Result<(),OSError>> + 'a {
+        WriteFuture {
             data: buffer,
             options: write_options,
             fd: self.fd,
             started: false,
             working: Arc::new(Mutex::new(WriteTask { waker: None, result: None }))
-        };
-        future
+        }
+    }
+    ///A fast path to write static data.
+    pub fn write_static<'a,O: Into<OSWriteOptions<'a>>>(&self, buffer: &'static [u8], write_options: O) -> impl Future<Output=Result<(),OSError>> + 'a {
+        let as_write_options = write_options.into();
+        let buffer = ExternalMemory::new(StaticBuffer(buffer), as_write_options.queue);
+        self.write_data(buffer, as_write_options)
+    }
+    ///A path that writes heap-allocated data.
+    pub fn write_boxed<'a, O: Into<OSWriteOptions<'a>>>(&self, buffer: Box<[u8]>, write_options: O) -> impl Future<Output=Result<(), OSError>> + 'a {
+        let as_write_options = write_options.into();
+        let buffer = ExternalMemory::new(BoxedBuffer(buffer), as_write_options.queue);
+        self.write_data(buffer, as_write_options)
     }
 }
 
@@ -108,7 +139,7 @@ impl Write {
     let file = std::fs::File::create(path).unwrap();
 
     let write = Write::new(file);
-    let future = write.write_static("hello from the test".as_bytes(), OSWriteOptions::new(dispatchr::queue::global(dispatchr::QoS::UserInitiated).unwrap()));
+    let future = write.write_static("hello from the test".as_bytes(), Priority::Testing);
     let result = crate::test::test_await(future, std::time::Duration::from_secs(1));
     assert!(result.is_ok());
 

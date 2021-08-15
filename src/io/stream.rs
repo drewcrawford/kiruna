@@ -23,7 +23,10 @@ impl std::error::Error for OSError {
 pub use read::OSReadOptions;
 pub use read::Read;
 pub use write::Write;
+pub use write::OSWriteOptions;
 use std::fmt::Formatter;
+use crate::Priority;
+use dispatchr::qos::QoS;
 
 ///Buffer type.
 ///
@@ -40,7 +43,14 @@ impl Buffer {
 }
 
 
-
+impl Priority {
+    fn as_qos(&self) -> QoS {
+        match self {
+            Priority::UserWaiting => {QoS::UserInitiated}
+            Priority::Testing => {QoS::Default}
+        }
+    }
+}
 
 
 

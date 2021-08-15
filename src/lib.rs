@@ -10,3 +10,6 @@ pub mod test;
 
 #[cfg(feature="io_stream")]
 pub mod io;
+mod priority;
+
+pub use priority::Priority;

@@ -10,6 +10,14 @@ impl Wake for FakeWaker {
         //nothing
     }
 }
+///A very silly single poll designed for tests
+pub fn test_poll<F: Future>(future: F) -> Poll<F::Output> {
+    let fake_waker = Arc::new(FakeWaker);
+    let as_waker: Waker = fake_waker.into();
+    let mut as_context = Context::from_waker(&as_waker);
+    let mut pinned = Box::pin(future);
+    pinned.as_mut().poll(&mut as_context)
+}
 ///A very silly executor designed for tests.
 pub fn test_await<F: Future>(future: F, timeout: Duration) -> F::Output{
     let fake_waker = Arc::new(FakeWaker);

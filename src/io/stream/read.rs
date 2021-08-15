@@ -6,7 +6,13 @@ use std::sync::{Mutex, Arc};
 use std::future::Future;
 use std::pin::Pin;
 use dispatchr::io::read;
+use crate::Priority;
 
+///Backend-specific read options.  On macOS, you may target a specific queue
+/// for the reply to read calls.
+///
+/// For cases where you intend to target a global queue, it may be more convenient to use [Priority] instead, which
+/// is convertible (often, implicitly) to this type.
 #[derive(Clone)]
 pub struct OSReadOptions<'a> {
     ///Queue (QoS) for performing I/O
@@ -16,6 +22,15 @@ impl<'a> OSReadOptions<'a> {
     pub fn new(queue: &'a dispatchr::queue::Unmanaged) -> Self {
         OSReadOptions {
             queue
+        }
+    }
+}
+
+impl From<Priority> for OSReadOptions<'static> {
+    fn from(priority: Priority) -> Self {
+        let queue = dispatchr::queue::global(priority.as_qos()).unwrap();
+        OSReadOptions {
+            queue: queue
         }
     }
 }
@@ -79,11 +94,11 @@ impl Read {
     }
 
     ///Reads the entire fd into memory
-    pub fn all<'a>(&self, os_read_options: OSReadOptions<'a>) -> DispatchReadFuture<'a> {
+    pub fn all<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> DispatchReadFuture<'a> {
         DispatchReadFuture {
             fd: dispatch_fd_t::new(self.fd),
             size: usize::MAX,
-            queue: os_read_options.queue,
+            queue: os_read_options.into().queue,
             result: Arc::new(Mutex::new(DispatchFutureResult { waker: None, result: None })),
             started: false
         }
@@ -93,12 +108,10 @@ impl Read {
 }
 #[test] fn test() {
     use crate::test::test_await;
-    use dispatchr::QoS;
-    use dispatchr::queue::global;
     use std::time::Duration;
     let path = std::path::Path::new("src/io/stream.rs");
     let file = std::fs::File::open(path).unwrap();
     let read = Read::new(file);
-    let buffer = test_await(read.all(OSReadOptions{queue: global(QoS::UserInitiated).unwrap()}), Duration::from_secs(2));
+    let buffer = test_await(read.all(Priority::Testing), Duration::from_secs(2));
     assert!(buffer.as_slice().starts_with("// FIND-ME".as_bytes()));
 }
