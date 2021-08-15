@@ -12,6 +12,8 @@ io_stream = []
 # enable test_await fn
 test = []
 stream_with_dispatch = ["io_stream","dispatchr"]
+# Various API to work with futures
+futures = []
 
 [dependencies]
 dispatchr = {path = "../dispatchr", optional=true}

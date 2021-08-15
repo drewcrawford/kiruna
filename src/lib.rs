@@ -11,5 +11,7 @@ pub mod test;
 #[cfg(feature="io_stream")]
 pub mod io;
 mod priority;
+#[cfg(feature="futures")]
+pub mod futures;
 
 pub use priority::Priority;
