@@ -8,7 +8,7 @@
 ///
 /// This type maps to some underlying OS-specific idea of thread or task priorities.
 ///
-/// Priority can be converted into various other types like [OSReadOptions] or [OSWriteOptions].
+/// Priority can be converted into various other types like [crate::io::stream::OSReadOptions] or [crate::io::stream::OSWriteOptions].
 /// Doing so may lose a bit of control but is sufficient for most applications.
 #[non_exhaustive]
 #[derive(Copy,Clone)]

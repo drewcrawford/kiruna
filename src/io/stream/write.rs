@@ -2,11 +2,8 @@ use std::os::unix::io::{RawFd, IntoRawFd};
 use dispatchr::external_data::{HasMemory, ExternalMemory};
 use dispatchr::queue::Unmanaged;
 use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll, Waker};
-use std::sync::{Mutex, Arc};
 use dispatchr::io::dispatch_fd_t;
-use dispatchr::data::DispatchData;
+use dispatchr::data::{DispatchData};
 use crate::io::stream::{OSError};
 use crate::Priority;
 
@@ -55,55 +52,6 @@ impl From<Priority> for OSWriteOptions<'static> {
     }
 }
 
-struct WriteTask {
-    waker: Option<Waker>,
-    result: Option<i32>,
-}
-
-
-struct WriteFuture<'a, DataType:DispatchData> {
-    data: DataType,
-    options: OSWriteOptions<'a>,
-    fd: RawFd,
-    started: bool,
-    working: Arc<Mutex<WriteTask>>
-}
-impl<'a, DataType: DispatchData + std::marker::Unpin> Future for WriteFuture<'a, DataType> {
-    type Output = Result<(),OSError>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut_self = self.get_mut();
-        if !mut_self.started {
-            mut_self.working.lock().unwrap().waker = Some(cx.waker().clone());
-            mut_self.started = true;
-            let move_lock = mut_self.working.clone();
-            dispatchr::io::write(dispatch_fd_t::new(mut_self.fd), &mut_self.data, &*mut_self.options.queue, move |_a,b| {
-                let mut lock = move_lock.lock().unwrap();
-
-                lock.result = Some(b);
-                lock.waker.take().unwrap().wake();
-
-            });
-            Poll::Pending
-        }
-        else {
-            let mut final_lock = mut_self.working.lock().unwrap();
-            if let Some(result) = final_lock.result {
-                if result == 0 {
-                    Poll::Ready(Ok(()))
-                }
-                else {
-                    Poll::Ready(Err(OSError(result)))
-                }
-            }
-            else {
-                final_lock.waker = Some(cx.waker().clone());
-                Poll::Pending
-            }
-        }
-    }
-}
-
 
 impl Write {
     pub fn new<T: IntoRawFd>(fd: T) -> Self{
@@ -111,26 +59,29 @@ impl Write {
             fd: fd.into_raw_fd()
         }
     }
-    fn write_data<'a>(&self, buffer: ExternalMemory, write_options: OSWriteOptions<'a>) -> impl Future<Output=Result<(),OSError>> + 'a {
-        WriteFuture {
-            data: buffer,
-            options: write_options,
-            fd: self.fd,
-            started: false,
-            working: Arc::new(Mutex::new(WriteTask { waker: None, result: None }))
-        }
+    fn write_data<'a>(&self, buffer: ExternalMemory, write_options: OSWriteOptions<'a>) -> impl Future<Output=Result<(), OSError>> + 'a{
+        let (continuation,completer) = blocksr::continuation::Continuation::<(),_>::new();
+        dispatchr::io::write_completion(dispatch_fd_t::new(self.fd), &buffer.as_unmanaged(), write_options.queue, |_data, err| {
+            if err == 0 {
+                completer.complete(Ok(()))
+            }
+            else {
+                completer.complete(Err(OSError(err)))
+            }
+        });
+        continuation
     }
     ///A fast path to write static data.
-    pub fn write_static<'a,O: Into<OSWriteOptions<'a>>>(&self, buffer: &'static [u8], write_options: O) -> impl Future<Output=Result<(),OSError>> + 'a {
+    pub fn write_static<'a,O: Into<OSWriteOptions<'a>>>(&self, buffer: &'static [u8], write_options: O) -> impl Future<Output=Result<(),OSError>> + 'a{
         let as_write_options = write_options.into();
         let buffer = ExternalMemory::new(StaticBuffer(buffer), as_write_options.queue);
         self.write_data(buffer, as_write_options)
     }
     ///A path that writes heap-allocated data.
-    pub fn write_boxed<'a, O: Into<OSWriteOptions<'a>>>(&self, buffer: Box<[u8]>, write_options: O) -> impl Future<Output=Result<(), OSError>> + 'a {
+    pub async fn write_boxed<'a, O: Into<OSWriteOptions<'a>>>(&self, buffer: Box<[u8]>, write_options: O) -> Result<(),OSError> {
         let as_write_options = write_options.into();
         let buffer = ExternalMemory::new(BoxedBuffer(buffer), as_write_options.queue);
-        self.write_data(buffer, as_write_options)
+        self.write_data(buffer, as_write_options).await
     }
 }
 

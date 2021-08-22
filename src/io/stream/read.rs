@@ -1,12 +1,10 @@
 use std::os::unix::io::{IntoRawFd, RawFd};
-use std::task::{Poll, Waker, Context};
-use crate::io::stream::Buffer;
+use crate::io::stream::{Buffer, OSError};
 use dispatchr::io::dispatch_fd_t;
-use std::sync::{Mutex, Arc};
 use std::future::Future;
-use std::pin::Pin;
-use dispatchr::io::read;
+use dispatchr::io::read_completion;
 use crate::Priority;
+use dispatchr::data::{Contiguous};
 
 ///Backend-specific read options.  On macOS, you may target a specific queue
 /// for the reply to read calls.
@@ -40,51 +38,6 @@ pub struct Read {
     fd: RawFd
 }
 
-///Internal result type for dispatch
-struct DispatchFutureResult {
-    waker: Option<Waker>,
-    result: Option<Buffer>,
-}
-
-///Future for dispatch_read
-pub struct DispatchReadFuture<'a> {
-    fd: dispatch_fd_t,
-    size: usize,
-    queue: &'a dispatchr::queue::Unmanaged,
-    result: Arc<Mutex<DispatchFutureResult>>,
-    started: bool
-}
-impl<'a> Future for DispatchReadFuture<'a> {
-    type Output = Buffer;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let result = self.result.lock().unwrap().result.take();
-        if let Some(buffer) = result {
-            Poll::Ready(buffer)
-
-        }
-        else {
-            //set new waker
-            self.result.lock().as_mut().unwrap().waker = Some(cx.waker().clone());
-            if !self.started {
-                //this needs to be set up front to guarantee that we don't get another call
-                {
-                    self.started = true;
-                }
-                let capture_arc = self.result.clone();
-                read(self.fd, self.size, self.queue, move |a,b| {
-                    let mut lock = capture_arc.lock().unwrap();
-                    if b == 0 {
-                        lock.result = Some(Buffer(a.as_contiguous()));
-                    }
-                    lock.waker.take().unwrap().wake();
-                });
-            }
-            Poll::Pending
-        }
-
-    }
-}
 
 impl Read {
     pub fn new<T: IntoRawFd>(fd: T) -> Read {
@@ -94,14 +47,17 @@ impl Read {
     }
 
     ///Reads the entire fd into memory
-    pub fn all<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> DispatchReadFuture<'a> {
-        DispatchReadFuture {
-            fd: dispatch_fd_t::new(self.fd),
-            size: usize::MAX,
-            queue: os_read_options.into().queue,
-            result: Arc::new(Mutex::new(DispatchFutureResult { waker: None, result: None })),
-            started: false
-        }
+    pub fn all<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> impl Future<Output=Result<Buffer,OSError>> {
+        let (continuation, completion) = blocksr::continuation::Continuation::<(),_>::new();
+        read_completion(dispatch_fd_t::new(self.fd), usize::MAX, os_read_options.into().queue, |data,err| {
+            if err==0 {
+                completion.complete(Ok(Buffer(Contiguous::new(data))))
+            }
+            else {
+                completion.complete(Err(OSError(err)))
+            }
+        });
+        continuation
     }
 
 
@@ -113,5 +69,5 @@ impl Read {
     let file = std::fs::File::open(path).unwrap();
     let read = Read::new(file);
     let buffer = test_await(read.all(Priority::Testing), Duration::from_secs(2));
-    assert!(buffer.as_slice().starts_with("// FIND-ME".as_bytes()));
+    assert!(buffer.unwrap().as_slice().starts_with("// FIND-ME".as_bytes()));
 }

@@ -11,13 +11,13 @@ sync = []
 io_stream = []
 # enable test_await fn
 test = []
-stream_with_dispatch = ["io_stream","dispatchr"]
+stream_with_dispatch = ["io_stream","dispatchr","blocksr/continuation"]
 # Various API to work with futures
 futures = []
 
 [dependencies]
 dispatchr = {path = "../dispatchr", optional=true}
-
+blocksr = {path = "../blocksr", optional = true}
 
 
 

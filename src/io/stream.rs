@@ -1,5 +1,5 @@
 // FIND-ME
-/*! Provides streaming IO.  See [io] for a comparison of io types.*/
+/*! Provides streaming IO.  See [crate::io] for a comparison of io types.*/
 #[cfg(not(feature ="stream_with_dispatch"))] compile_error!("Need to specify a backend");
 
 use dispatchr::data::Contiguous;
