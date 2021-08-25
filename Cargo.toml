@@ -14,6 +14,8 @@ test = []
 stream_with_dispatch = ["io_stream","dispatchr","blocksr/continuation"]
 # Various API to work with futures
 futures = []
+# API to join futures
+join = []
 
 [dependencies]
 dispatchr = {path = "../dispatchr", optional=true}

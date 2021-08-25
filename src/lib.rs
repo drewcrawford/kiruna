@@ -13,5 +13,7 @@ pub mod io;
 mod priority;
 #[cfg(feature="futures")]
 pub mod futures;
+#[cfg(feature="join")]
+pub mod join;
 
 pub use priority::Priority;
