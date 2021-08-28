@@ -2,7 +2,7 @@
 /*! Provides streaming IO.  See [crate::io] for a comparison of io types.*/
 #[cfg(not(feature ="stream_with_dispatch"))] compile_error!("Need to specify a backend");
 
-use dispatchr::data::{Contiguous, Managed, Unmanaged, DispatchData};
+use dispatchr::data::{ Managed, Unmanaged, DispatchData};
 
 mod read;
 mod write;
@@ -37,11 +37,21 @@ impl Buffer {
     pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
        self.0.as_unmanaged()
     }
-    pub fn as_contiguous(&self) -> dispatchr::data::Contiguous {
-        Contiguous::new(self.as_dispatch_data())
+    pub fn as_contiguous(&self) -> Contiguous {
+        Contiguous(dispatchr::data::Contiguous::new(self.as_dispatch_data()))
     }
     pub(crate) fn add(&mut self, tail: &Unmanaged) {
         self.0 = self.0.as_unmanaged().concat(tail)
+    }
+}
+
+pub struct Contiguous(dispatchr::data::Contiguous);
+impl Contiguous {
+    pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
+        self.0.as_dispatch_data()
+    }
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
     }
 }
 
