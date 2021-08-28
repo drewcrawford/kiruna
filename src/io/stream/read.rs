@@ -4,7 +4,7 @@ use dispatchr::io::dispatch_fd_t;
 use std::future::Future;
 use dispatchr::io::read_completion;
 use crate::Priority;
-use dispatchr::data::{Contiguous};
+use dispatchr::data::{Managed, Unmanaged, DispatchData};
 
 ///Backend-specific read options.  On macOS, you may target a specific queue
 /// for the reply to read calls.
@@ -45,19 +45,36 @@ impl Read {
             fd: fd.into_raw_fd()
         }
     }
-
-    ///Reads the entire fd into memory
-    pub fn all<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> impl Future<Output=Result<Buffer,OSError>> {
+    ///Performs a single read.
+    ///
+    /// In practice, this function reads 0 bytes if the stream is closed.
+    fn once<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> impl Future<Output=Result<Managed,OSError>> {
         let (continuation, completion) = blocksr::continuation::Continuation::<(),_>::new();
         read_completion(dispatch_fd_t::new(self.fd), usize::MAX, os_read_options.into().queue, |data,err| {
             if err==0 {
-                completion.complete(Ok(Buffer(Contiguous::new(data))))
+                completion.complete(Ok(Managed::retain(data)))
             }
             else {
                 completion.complete(Err(OSError(err)))
             }
         });
         continuation
+    }
+
+    ///Reads the entire fd into memory
+    pub async fn all<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> Result<Buffer,OSError> {
+        let mut buffer = Buffer(Managed::retain(Unmanaged::new()));
+        let read_options = os_read_options.into();
+        loop {
+            let new_data = self.once(read_options.clone()).await?;
+            if new_data.as_unmanaged().len() == 0 {
+                break
+            }
+            else {
+                buffer.add(new_data.as_unmanaged());
+            }
+        }
+        Ok(buffer)
     }
 
 
@@ -69,5 +86,32 @@ impl Read {
     let file = std::fs::File::open(path).unwrap();
     let read = Read::new(file);
     let buffer = test_await(read.all(Priority::Testing), Duration::from_secs(2));
-    assert!(buffer.unwrap().as_slice().starts_with("// FIND-ME".as_bytes()));
+    assert!(buffer.unwrap().as_contiguous().as_slice().starts_with("// FIND-ME".as_bytes()));
+}
+#[test] fn multiple_passes() {
+    use core::ffi::c_void;
+    //Write in multiple pieces and ensure we get all of it
+    //mt2-130
+    let mut pipes = [0,0];
+    let pipe = unsafe{ libc::pipe(&mut pipes as *mut _) };
+    assert!(pipe >= 0);
+    let read_struct = Read::new(pipes[0]);
+    let read_all = read_struct.all(super::Priority::Testing);
+    std::thread::spawn(move || {
+        for item in 0..10 {
+            let str_strong = format!("{}\n",item);
+            let str = str_strong.as_bytes();
+            unsafe{ libc::write(pipes[1], str as *const _ as *const c_void, str.len());}
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        unsafe{ libc::close(pipes[1]) };
+    });
+    let read = crate::test::test_await(read_all, std::time::Duration::from_secs(1));
+
+    let mut expected = String::new();
+    for item in 0..10 {
+        expected.push_str(&format!("{}\n",item));
+    }
+    let expected_bytes = expected.as_bytes();
+    assert_eq!(read.unwrap().as_contiguous().as_slice(), expected_bytes)
 }

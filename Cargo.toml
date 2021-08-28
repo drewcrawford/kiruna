@@ -21,5 +21,6 @@ join = []
 dispatchr = {path = "../dispatchr", optional=true}
 blocksr = {path = "../blocksr", optional = true}
 
-
+[dev-dependencies]
+libc = "0.2.101" # used in stream-read tests
 
