@@ -43,17 +43,21 @@ impl<'a> Executor<'a> {
     /// This function will return when all spawned tasks complete.
     pub fn drain(mut self) {
         while let Ok(wakeup) = self.channel.recv() {
-            let task = self.tasks[wakeup.0 as usize].as_ref().unwrap();
-            let sync_wake = Wake::new(wakeup, self.spawner.clone());
-            let as_waker: Waker = Arc::new(sync_wake).into();
-            let mut context = Context::from_waker(&as_waker);
-            //safe because it's always called from this thread
-            let result = unsafe{ task.poll(&mut context) };
-            if result.is_ready() {
-                self.num_active -= 1;
-                self.tasks[wakeup.0 as usize].take();
+            //tasks may send multiple wakeups, theoretically.
+            //if so, don't worry too much about it.
+            if let Some(task) = self.tasks[wakeup.0 as usize].as_ref() {
+                let sync_wake = Wake::new(wakeup, self.spawner.clone());
+                let as_waker: Waker = Arc::new(sync_wake).into();
+                let mut context = Context::from_waker(&as_waker);
+                //safe because it's always called from this thread
+                let result = unsafe{ task.poll(&mut context) };
+                if result.is_ready() {
+                    self.num_active -= 1;
+                    self.tasks[wakeup.0 as usize].take();
+                }
+                if self.num_active == 0 { break }
             }
-            if self.num_active == 0 { break }
+
         }
     }
 }
