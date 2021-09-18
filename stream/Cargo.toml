@@ -11,7 +11,7 @@ blocksr = {git = "https://github.com/drewcrawford/blocksr",features=["continuati
 priority = {path = "../priority"}
 
 [dev-dependencies]
-kiruna = {path = "../kiruna", features=["test"]}
+kiruna = {path = "../", features=["test"]}
 
 [target.'cfg(target_os="macos")'.dev-dependencies]
 libc = "0.2.101" # used in stream-read tests
