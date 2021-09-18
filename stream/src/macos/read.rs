@@ -82,7 +82,8 @@ impl Read {
 #[test] fn test() {
     use kiruna::test::test_await;
     use std::time::Duration;
-    let path = std::path::Path::new("src/lib.rs");
+    // println!("{:?}",std::env::current_dir());
+    let path = std::path::Path::new("src/macos.rs");
     let file = std::fs::File::open(path).unwrap();
     let read = Read::new(file);
     let buffer = test_await(read.all(Priority::Testing), Duration::from_secs(2));
