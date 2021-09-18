@@ -4,8 +4,8 @@ use dispatchr::queue::Unmanaged;
 use std::future::Future;
 use dispatchr::io::dispatch_fd_t;
 use dispatchr::data::{DispatchData};
-use crate::io::stream::{OSError};
-use crate::Priority;
+use crate::{OSError, PriorityDispatch};
+use priority::Priority;
 
 pub struct Write {
     fd: RawFd
@@ -91,7 +91,7 @@ impl Write {
 
     let write = Write::new(file);
     let future = write.write_static("hello from the test".as_bytes(), Priority::Testing);
-    let result = crate::test::test_await(future, std::time::Duration::from_secs(1));
+    let result = kiruna::test::test_await(future, std::time::Duration::from_secs(1));
     assert!(result.is_ok());
 
     let read_file = std::fs::read(path);

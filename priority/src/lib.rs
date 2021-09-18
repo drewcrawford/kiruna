@@ -8,7 +8,7 @@
 ///
 /// This type maps to some underlying OS-specific idea of thread or task priorities.
 ///
-/// Priority can be converted into various other types like [crate::io::stream::OSReadOptions] or [crate::io::stream::OSWriteOptions].
+/// Priority can be converted into various other types like OSReadOptions or OSWriteOptions.
 /// Doing so may lose a bit of control but is sufficient for most applications.
 #[non_exhaustive]
 #[derive(Copy,Clone)]
@@ -18,4 +18,5 @@ pub enum Priority {
     ///This priority is used for most unit tests that don't especially care what priority they use.
     Testing
 }
+
 

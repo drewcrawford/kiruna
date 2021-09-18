@@ -1,9 +1,9 @@
 use std::os::unix::io::{IntoRawFd, RawFd};
-use crate::io::stream::{Buffer, OSError};
+use crate::{Buffer, OSError, PriorityDispatch};
 use dispatchr::io::dispatch_fd_t;
 use std::future::Future;
 use dispatchr::io::read_completion;
-use crate::Priority;
+use priority::Priority;
 use dispatchr::data::{Managed, Unmanaged, DispatchData};
 
 ///Backend-specific read options.  On macOS, you may target a specific queue
@@ -80,9 +80,9 @@ impl Read {
 
 }
 #[test] fn test() {
-    use crate::test::test_await;
+    use kiruna::test::test_await;
     use std::time::Duration;
-    let path = std::path::Path::new("src/io/stream.rs");
+    let path = std::path::Path::new("src/lib.rs");
     let file = std::fs::File::open(path).unwrap();
     let read = Read::new(file);
     let buffer = test_await(read.all(Priority::Testing), Duration::from_secs(2));
@@ -106,7 +106,7 @@ impl Read {
         }
         unsafe{ libc::close(pipes[1]) };
     });
-    let read = crate::test::test_await(read_all, std::time::Duration::from_secs(1));
+    let read = kiruna::test::test_await(read_all, std::time::Duration::from_secs(1));
 
     let mut expected = String::new();
     for item in 0..10 {

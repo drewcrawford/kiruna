@@ -1,6 +1,5 @@
 // FIND-ME
-/*! Provides streaming IO.  See [crate::io] for a comparison of io types.*/
-#[cfg(not(feature ="stream_with_dispatch"))] compile_error!("Need to specify a backend");
+/*! Provides streaming IO.  See `kiruna::io` for a comparison of io types.*/
 
 use dispatchr::data::{ Managed, Unmanaged, DispatchData};
 
@@ -25,7 +24,7 @@ pub use read::Read;
 pub use write::Write;
 pub use write::OSWriteOptions;
 use std::fmt::Formatter;
-use crate::Priority;
+use priority::Priority;
 use dispatchr::qos::QoS;
 
 ///Buffer type.
@@ -35,7 +34,7 @@ use dispatchr::qos::QoS;
 pub struct Buffer(Managed);
 impl Buffer {
     pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
-       self.0.as_unmanaged()
+        self.0.as_unmanaged()
     }
     pub fn as_contiguous(&self) -> Contiguous {
         Contiguous(dispatchr::data::Contiguous::new(self.as_dispatch_data()))
@@ -55,12 +54,17 @@ impl Contiguous {
     }
 }
 
+trait PriorityDispatch {
+    fn as_qos(&self) -> QoS;
+}
 
-impl Priority {
+
+impl PriorityDispatch for Priority {
     fn as_qos(&self) -> QoS {
         match self {
             Priority::UserWaiting => {QoS::UserInitiated}
             Priority::Testing => {QoS::Default}
+            _ => {QoS::Unspecified}
         }
     }
 }
