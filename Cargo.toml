@@ -19,8 +19,8 @@ join = []
 
 [dependencies]
 dispatchr = {path = "../dispatchr", optional=true}
-blocksr = {path = "../blocksr", optional = true}
+blocksr = {git = "https://github.com/drewcrawford/blocksr", optional = true}
 
-[dev-dependencies]
+[target.'cfg(macos)'.dev-dependencies]
 libc = "0.2.101" # used in stream-read tests
 
