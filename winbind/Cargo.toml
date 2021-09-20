@@ -5,8 +5,10 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+#although this crate is only useful on windows, if you use the `--all` flag on another platform you will build it
+# maybe this is not what we want
+[target.'cfg(target_os="windows")'.dependencies]
 windows = "0.20.0"
 
-[build-dependencies]
+[target.'cfg(target_os="windows")'.build-dependencies]
 windows = "0.20.0"

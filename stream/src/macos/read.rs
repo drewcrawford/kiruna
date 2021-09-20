@@ -1,10 +1,38 @@
 use std::os::unix::io::{IntoRawFd, RawFd};
-use crate::{Buffer, OSError, PriorityDispatch};
+use crate::{OSError, PriorityDispatch};
 use dispatchr::io::dispatch_fd_t;
 use std::future::Future;
 use dispatchr::io::read_completion;
 use priority::Priority;
 use dispatchr::data::{Managed, Unmanaged, DispatchData};
+
+///Buffer type.
+///
+/// This is an opaque buffer managed by kiruna.
+#[derive(Debug)]
+pub struct ReadBuffer(pub(crate) Managed);
+impl ReadBuffer {
+    pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
+        self.0.as_unmanaged()
+    }
+    pub fn into_contiguous(self) -> ReadContiguousBuffer {
+        //move out of self here
+        ReadContiguousBuffer(dispatchr::data::Contiguous::new(self.0 ))
+    }
+    pub(crate) fn add(&mut self, tail: &Unmanaged) {
+        self.0 = self.0.as_unmanaged().concat(tail)
+    }
+}
+
+pub struct ReadContiguousBuffer(dispatchr::data::Contiguous);
+impl ReadContiguousBuffer {
+    pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
+        self.0.as_dispatch_data()
+    }
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+}
 
 ///Backend-specific read options.  On macOS, you may target a specific queue
 /// for the reply to read calls.
@@ -62,8 +90,8 @@ impl Read {
     }
 
     ///Reads the entire fd into memory
-    pub async fn all<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> Result<Buffer,OSError> {
-        let mut buffer = Buffer(Managed::retain(Unmanaged::new()));
+    pub async fn all<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> Result<ReadBuffer,OSError> {
+        let mut buffer = ReadBuffer(Managed::retain(Unmanaged::new()));
         let read_options = os_read_options.into();
         loop {
             let new_data = self.once(read_options.clone()).await?;
@@ -87,7 +115,7 @@ impl Read {
     let file = std::fs::File::open(path).unwrap();
     let read = Read::new(file);
     let buffer = test_await(read.all(Priority::Testing), Duration::from_secs(2));
-    assert!(buffer.unwrap().as_contiguous().as_slice().starts_with("// FIND-ME".as_bytes()));
+    assert!(buffer.unwrap().into_contiguous().as_slice().starts_with("// FIND-ME".as_bytes()));
 }
 #[test] fn multiple_passes() {
     use core::ffi::c_void;
@@ -114,5 +142,5 @@ impl Read {
         expected.push_str(&format!("{}\n",item));
     }
     let expected_bytes = expected.as_bytes();
-    assert_eq!(read.unwrap().as_contiguous().as_slice(), expected_bytes)
+    assert_eq!(read.unwrap().into_contiguous().as_slice(), expected_bytes)
 }
