@@ -2,7 +2,8 @@
 
 members = [
     "stream",
-    "priority"
+    "priority",
+    "winbind",
 ]
 
 [package]
