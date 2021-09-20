@@ -8,6 +8,8 @@ maybe this is not what we want */
         Windows::Win32::System::Diagnostics::Debug::GetLastError,
        Windows::Win32::System::Threading::{CreateSemaphoreA,WaitForSingleObjectEx,ReleaseSemaphore},
         Windows::Win32::Foundation::{PSTR,CloseHandle},
-        Windows::Win32::System::Diagnostics::Debug::WIN32_ERROR,
+        Windows::Win32::System::Diagnostics::Debug::{WIN32_ERROR,FormatMessageA},
+        Windows::Win32::System::Memory::LocalFree,
+
     }
 }
