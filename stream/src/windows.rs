@@ -7,7 +7,7 @@ use winbind::Windows::Win32::System::Diagnostics::Debug::WIN32_ERROR;
 use std::fmt::Formatter;
 
 #[derive(Debug)]
-pub struct OSError(WIN32_ERROR);
+pub struct OSError(pub(super)WIN32_ERROR);
 
 impl std::fmt::Display for OSError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

@@ -37,6 +37,11 @@ impl ContiguousReadBuffer {
 
 
 pub struct OSReadOptions;
+impl OSReadOptions {
+    pub fn new() -> Self {
+        OSReadOptions
+    }
+}
 
 struct ReadChild {
     buffer: ReadBuffer,
@@ -98,7 +103,8 @@ impl ReadChild {
                 Poll::Pending
             }
             else {
-                Poll::Ready(Err((OSError(GetLastError()),ReadBuffer(Vec::new()))))
+                //todo: avoid this clone?
+                Poll::Ready(Err((OSError(GetLastError()),ReadBuffer(as_mut.buffer.0.clone()))))
             }
         }
     }

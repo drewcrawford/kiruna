@@ -174,7 +174,7 @@ pub trait PayloadTrait {
 }
 
 extern "system" fn completion<Payload: PayloadTrait>(error_code: u32, bytes_transferred: u32, overlapped: *mut OVERLAPPED) {
-    // println!("completion error_code {} bytes_transferred {}",error_code, bytes_transferred);
+    println!("completion error_code {} bytes_transferred {}",error_code, bytes_transferred);
     unsafe {
         let overlapped = &*overlapped;
         let child_raw = overlapped.hEvent.0;

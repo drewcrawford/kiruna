@@ -3,7 +3,7 @@ fn main() {
 maybe this is not what we want */
     #[cfg(target_os = "windows")]
     windows::build! {
-        Windows::Win32::Storage::FileSystem::ReadFileEx,
+        Windows::Win32::Storage::FileSystem::{ReadFileEx,WriteFileEx},
         Windows::Win32::System::SystemServices::{OVERLAPPED},
         Windows::Win32::System::Diagnostics::Debug::GetLastError,
        Windows::Win32::System::Threading::{CreateSemaphoreA,WaitForSingleObjectEx,ReleaseSemaphore},
