@@ -10,7 +10,7 @@ edition = "2018"
 priority = {path = "../priority"}
 
 [target.'cfg(target_os="macos")'.dependencies]
-dispatchr = {path = "../../dispatchr"}
+dispatchr = {git = "https://github.com/drewcrawford/dispatchr"}
 blocksr = {git = "https://github.com/drewcrawford/blocksr",features=["continuation"]}
 
 [target.'cfg(target_os="windows")'.dependencies]
