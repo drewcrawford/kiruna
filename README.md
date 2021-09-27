@@ -22,7 +22,7 @@ which might be *delaying* outstanding work.  For that reason, many async librari
 There are some cool solutions to this problem like [thin_main_loop](https://github.com/diwic/thin_main_loop).  However, they tend to view
 GUI problems as a separate "thing".  To some extent they are, to some extent though it creates distance with more 'mainline' async Rust.
 
-The whole problem is resolved by assigning every task a [priority::Priority].  Tasks with the same priority target maximum throughput,
+The whole problem is resolved by assigning every task a *priority*.  Tasks with the same priority target maximum throughput,
 so that's the same as in serverland.  Tasks with different priorities target not interrupting a higher-priority task.
 
 Of course, the key difference of this design is it requires the application developer to specify the priority of the task.  This
@@ -64,7 +64,7 @@ than it could be.
 
 In Kiruna, the "async read function on macOS" *looks* like it does that. Here it is:
 
-```ignore
+```rust
     ///Performs a single read.
     ///
     /// In practice, this function reads 0 bytes if the stream is closed.
@@ -103,16 +103,6 @@ to jump into and see what it does.
 When you have a "big reactor" design, porting your library to an OS becomes all about porting the reactor, which ultimately calls
 some very low-level kernel call regardless of read/write, file/socket, etc.
 For example, [kqueue](https://en.wikipedia.org/wiki/Kqueue) or [epoll](https://man7.org/linux/man-pages/man7/epoll.7.html).
-
-In limited cases, such as for read/write on the same OS and personality, there is some code reuse, but it is quite
-narrow in scope and only has to worry about a very small set of situations within a single platform so it's easy
-to jump into.
-
-## OS leverage
-
-When you have a "big reactor" design, porting your library to an OS becomes all about porting the reactor, which ultimately calls
-some very low-level kernel call regardless of the underlying file or socket,
-for example, [kqueue](https://en.wikipedia.org/wiki/Kqueue) or [epoll](https://man7.org/linux/man-pages/man7/epoll.7.html).
 
 However, kqueue is [not anywhere close to the preferred way to do IO on macOS](https://news.ycombinator.com/item?id=12687257), that is [dispatch_read](https://developer.apple.com/documentation/dispatch/1388933-dispatch_read).
 Similarly, `epoll` is not the preferred way

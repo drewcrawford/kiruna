@@ -135,7 +135,7 @@ impl Read {
         }
         unsafe{ libc::close(pipes[1]) };
     });
-    let read = kiruna::test::test_await(read_all, std::time::Duration::from_secs(1));
+    let read = kiruna::test::test_await(read_all, std::time::Duration::from_secs(10));
 
     let mut expected = String::new();
     for item in 0..10 {

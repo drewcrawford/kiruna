@@ -1,6 +1,6 @@
 pub mod read;
 mod threadpool;
-mod write;
+pub mod write;
 mod overlapped;
 
 use winbind::Windows::Win32::System::Diagnostics::Debug::WIN32_ERROR;
