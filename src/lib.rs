@@ -10,6 +10,13 @@ Kiruna is an experimental, tiny, fast, and simple async executor and IO library.
 
 Kiruna is also a remote town in the arctic circle.  Programs that use it will be cold, beautiful, and isolated from more popular async runtimes.
 
+# Practicalities
+
+* Kiruna is an experimental/research quality.  But I am depending on it from real projects so I don't intend it to be a toy library.
+* Many features are missing, partly implemented or still being designed.  Some APIs will change.
+* macOS support is decent.  Windows is early but passing most tests.  Linux is planned but not implemented, iOS might happen if I end up needing it
+* Free for noncommerial or 'small commercial' use, commercial licensing is available.
+
 # Kiruna manifesto
 
 ## Interactive apps
@@ -138,15 +145,6 @@ Coming someday:
 Out of scope:
 * Lesser-used IO, like multiprocess communication.  Stay tuned for future crates!
 * High-level IO, like TLS or HTTP
-
-
-# Practicalities
-
-* Kiruna is an experimental/research quality.  But I am depending on it from real projects so I don't intend it to be a toy library.
-* Many features are missing, partly implemented or still being designed.  Some APIs will change.
-* macOS support is decent.  Windows is early but passing most tests.  Linux is planned but not implemented, iOS might happen if I end up needing it
-* Free for noncommerial or 'small commercial' use, commercial licensing is available.
-
 */
 
 #[cfg(feature="sync")]
