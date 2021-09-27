@@ -26,7 +26,7 @@ impl ReadBuffer {
     }
 }
 
-///Actually, both buffers are contiguous on Windows, but we support the same API for compatibiltiy.
+///Actually, both buffers are contiguous on Windows, but we support the same API as other platforms for compatability.
 pub struct ContiguousReadBuffer(Vec<u8>);
 impl ContiguousReadBuffer {
     pub fn as_slice(&self) -> &[u8] {

@@ -23,6 +23,7 @@ test = []
 futures = []
 # API to join futures
 join = []
+all = ["sync","io_stream","test","futures","join"]
 
 [dependencies]
 stream = {path = "stream", optional=true}

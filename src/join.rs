@@ -64,10 +64,14 @@ impl<A,B,AR,BR> std::future::Future for Join2<A,B,AR,BR> where A: std::future::F
     }
 }
 
+///Joins 2 futures
 pub fn join2<A,B>(a: A, b: B) -> impl Future<Output=(A::Output,B::Output)> where A: Future, B: Future{
     Join2::new(a,b)
 }
 
+///The error of 2 joined futures.
+///
+/// This result type is either one error or the other.  In the case they are the same type, they can be [.merge]ed.
 #[derive(Debug)]
 pub enum Error2<A: std::error::Error,B: std::error::Error> {
     A(A),
@@ -93,7 +97,7 @@ impl<A: std::error::Error> Error2<A,A> {
     }
 }
 
-
+///A 'fail-fast' future joiner
 enum TryJoin2<A,B,AR,BR,AE,BE> where A: Future<Output=Result<AR,AE>>,B:Future<Output=Result<BR,BE>> {
     Polling {
         a: ReadyOrNot<A,AR>,

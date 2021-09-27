@@ -1,6 +1,8 @@
-///Models the priority of a task.
+///Models the priority of a task in a platform-independent way.
 ///
-/// This normally ought to be set by the top level application,
+/// The way you actaully specify this is with some usecase (like testing, or the user is waiting, etc.)
+///
+/// This normally ought to be defined by the top level application,
 /// as e.g. reading a lot file is a lot different than opening a user document,
 /// and this is normally not possible to distinguish in a library.  Therefore,
 /// libraries ought to be careful to expose the right information to their callers,

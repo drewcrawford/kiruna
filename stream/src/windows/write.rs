@@ -69,7 +69,6 @@ impl<Slice: AsSlice> PayloadTrait for WriteOp<Slice> {
         }
 
     }
-
     fn resume_op(self: Pin<&mut Self>, error_code: u32, _bytes_transferred: u32, _handle: HANDLE, _overlapped: Pin<&mut OVERLAPPED>, _h_event: HANDLE, _completion: unsafe extern "system" fn(u32, u32, *mut OVERLAPPED)) -> Poll<Result<Self::Ok, Self::Failure>> {
         if error_code != 0 {
             Poll::Ready(Err(OSError(WIN32_ERROR(error_code))))
@@ -81,6 +80,7 @@ impl<Slice: AsSlice> PayloadTrait for WriteOp<Slice> {
 }
 
 impl Write {
+    ///New write operation
     pub fn new(handle: std::os::windows::prelude::RawHandle) -> Self {
         Write {
             fd: HANDLE(handle as isize)

@@ -17,8 +17,7 @@ impl std::error::Error for OSError {
 }
 
 
-pub use read::OSReadOptions;
-pub use read::Read;
+pub use read::{OSReadOptions,ReadContiguousBuffer, ReadBuffer,Read};
 pub use write::Write;
 pub use write::OSWriteOptions;
 use std::fmt::Formatter;
@@ -28,6 +27,7 @@ use dispatchr::qos::QoS;
 
 
 pub(super) trait PriorityDispatch {
+    ///Gets the QoS for the specified priority
     fn as_qos(&self) -> QoS;
 }
 
