@@ -17,7 +17,7 @@ pub struct Write {
 pub struct OSWriteOptions {
 }
 impl OSWriteOptions {
-    fn new() -> OSWriteOptions {
+    pub fn new() -> OSWriteOptions {
         OSWriteOptions{}
     }
 }
