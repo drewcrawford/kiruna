@@ -7,9 +7,10 @@ use std::pin::Pin;
 use std::task::{Poll};
 use winbind::Windows::Win32::System::Diagnostics::Debug::GetLastError;
 use winbind::Windows::Win32::Foundation::HANDLE;
-use std::marker::PhantomPinned;
+use std::marker::{PhantomPinned, PhantomData};
 use winbind::Windows::Win32::System::Diagnostics::Debug::WIN32_ERROR;
 use crate::windows::overlapped::{PayloadTrait, Parent};
+use priority::Priority;
 
 
 ///Reads from a file descriptor
@@ -18,39 +19,45 @@ pub struct Read {
 }
 
 #[derive(Debug)]
-pub struct ReadBuffer(Vec<u8>);
+pub struct Buffer(Vec<u8>);
 
-impl ReadBuffer {
-    pub fn into_contiguous(self) -> ContiguousReadBuffer {
-        ContiguousReadBuffer(self.0)
+impl Buffer {
+    pub fn into_contiguous(self) -> ContiguousBuffer {
+        ContiguousBuffer(self.0)
     }
 }
 
 ///Actually, both buffers are contiguous on Windows, but we support the same API as other platforms for compatability.
-pub struct ContiguousReadBuffer(Vec<u8>);
-impl ContiguousReadBuffer {
+pub struct ContiguousBuffer(Vec<u8>);
+impl ContiguousBuffer {
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
     }
 }
 
 
-
-pub struct OSReadOptions;
-impl OSReadOptions {
+#[derive(Clone)]
+pub struct OSOptions<'a>(&'a PhantomData<()>);
+impl<'a> OSOptions<'a> {
     pub fn new() -> Self {
-        OSReadOptions
+        OSOptions(&PhantomData)
+    }
+}
+impl<'a> From<Priority> for OSOptions<'a> {
+    fn from(_: Priority) -> Self {
+        //todo: Actually use the priority somewhere, if needed
+        OSOptions::new()
     }
 }
 
 struct ReadChild {
-    buffer: ReadBuffer,
+    buffer: Buffer,
     //inner buffer ptr, overlapped are passed to OS.  So we pin this struct.
     _pinned: PhantomPinned,
 }
 impl PayloadTrait for ReadChild {
-    type Ok = ReadBuffer;
-    type Failure = (OSError,ReadBuffer);
+    type Ok = Buffer;
+    type Failure = (OSError,Buffer);
     #[allow(non_snake_case)]
     fn begin_op(self: Pin<&mut Self>, handle: HANDLE, overlapped: Pin<&mut MaybeUninit<OVERLAPPED>>, hEvent: HANDLE, completion: unsafe extern "system" fn(u32, u32, *mut OVERLAPPED)) -> Poll<Result<Self::Ok,Self::Failure>> {
        self.read_impl(handle, overlapped, hEvent, completion)
@@ -59,7 +66,7 @@ impl PayloadTrait for ReadChild {
     fn resume_op(self: Pin<&mut Self>, error_code: u32, bytes_transferred: u32, handle: HANDLE,overlapped: Pin<&mut OVERLAPPED>, hEvent: HANDLE, completion: unsafe extern "system" fn(u32, u32, *mut OVERLAPPED)) -> Poll<Result<Self::Ok, Self::Failure>> {
         if error_code != 0 {
             //todo: avoid this clone?
-            return Poll::Ready(Err((OSError(WIN32_ERROR(error_code)), ReadBuffer(self.buffer.0.clone()))));
+            return Poll::Ready(Err((OSError(WIN32_ERROR(error_code)), Buffer(self.buffer.0.clone()))));
         }
         unsafe {
             let s = self.get_unchecked_mut();
@@ -104,7 +111,7 @@ impl ReadChild {
             }
             else {
                 //todo: avoid this clone?
-                Poll::Ready(Err((OSError(GetLastError()),ReadBuffer(as_mut.buffer.0.clone()))))
+                Poll::Ready(Err((OSError(GetLastError()),Buffer(as_mut.buffer.0.clone()))))
             }
         }
     }
@@ -122,10 +129,10 @@ impl Read {
     }
 
     ///Reads the entire fd into memory
-    pub async fn all<'a, O: Into<OSReadOptions>>(&self, _os_read_options: O) -> Result<ReadBuffer,(OSError,ReadBuffer)> {
+    pub async fn all<'a, O: Into<OSOptions<'a>>>(&self, _os_read_options: O) -> Result<Buffer,OSError> {
         let as_handle =  winbind::Windows::Win32::Foundation::HANDLE(self.fd as isize);
             let fut = Parent::new(as_handle, ReadChild {
-                buffer: ReadBuffer(Vec::with_capacity(READ_SIZE)),
+                buffer: Buffer(Vec::with_capacity(READ_SIZE)),
                 _pinned: Default::default()
             });
 
@@ -135,10 +142,10 @@ impl Read {
                 //this is really a success message in this context, basically EOF
                 Err((OSError(ERROR_BROKEN_PIPE),new_buffer)) => {
                     return Ok(new_buffer);
-                }
-                other => {
-                    return other;
-                }
+                },
+                //erase the buffer - type conversion
+                Ok(ok) => Ok(ok),
+                Err(other) => Err(other.0),
             }
 
     }
@@ -146,12 +153,12 @@ impl Read {
 
 #[cfg(test)] mod tests {
     use std::process::{Command, Stdio};
-    use crate::windows::read::{Read, OSReadOptions};
+    use crate::windows::read::{Read, OSOptions};
 
     #[test] fn read_process() {
         let c = Command::new("systeminfo").stdout(Stdio::piped()).spawn().unwrap();
         let read = Read::new(c.stdout.unwrap());
-        let future = read.all(OSReadOptions);
+        let future = read.all(OSOptions::new());
         let result = kiruna::test::test_await(future, std::time::Duration::from_secs(10)).unwrap();
         println!("result length {:?}",result.0.len());
         println!("result {:?}",result.0);

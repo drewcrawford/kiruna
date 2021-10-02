@@ -15,17 +15,17 @@ impl ReadBuffer {
     pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
         self.0.as_unmanaged()
     }
-    pub fn into_contiguous(self) -> ReadContiguousBuffer {
+    pub fn into_contiguous(self) -> ContiguousBuffer {
         //move out of self here
-        ReadContiguousBuffer(dispatchr::data::Contiguous::new(self.0 ))
+        ContiguousBuffer(dispatchr::data::Contiguous::new(self.0 ))
     }
     pub(crate) fn add(&mut self, tail: &Unmanaged) {
         self.0 = self.0.as_unmanaged().concat(tail)
     }
 }
 
-pub struct ReadContiguousBuffer(dispatchr::data::Contiguous);
-impl ReadContiguousBuffer {
+pub struct ContiguousBuffer(dispatchr::data::Contiguous);
+impl ContiguousBuffer {
     pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
         self.0.as_dispatch_data()
     }
@@ -40,22 +40,22 @@ impl ReadContiguousBuffer {
 /// For cases where you intend to target a global queue, it may be more convenient to use [Priority] instead, which
 /// is convertible (often, implicitly) to this type.
 #[derive(Clone)]
-pub struct OSReadOptions<'a> {
+pub struct OSOptions<'a> {
     ///Queue (QoS) for performing I/O
     queue: &'a dispatchr::queue::Unmanaged
 }
-impl<'a> OSReadOptions<'a> {
+impl<'a> OSOptions<'a> {
     pub fn new(queue: &'a dispatchr::queue::Unmanaged) -> Self {
-        OSReadOptions {
+        OSOptions {
             queue
         }
     }
 }
 
-impl From<Priority> for OSReadOptions<'static> {
+impl From<Priority> for OSOptions<'static> {
     fn from(priority: Priority) -> Self {
         let queue = dispatchr::queue::global(priority.as_qos()).unwrap();
-        OSReadOptions {
+        OSOptions {
             queue: queue
         }
     }
@@ -76,7 +76,7 @@ impl Read {
     ///Performs a single read.
     ///
     /// In practice, this function reads 0 bytes if the stream is closed.
-    fn once<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> impl Future<Output=Result<Managed,OSError>> {
+    fn once<'a, O: Into<OSOptions<'a>>>(&self, os_read_options: O) -> impl Future<Output=Result<Managed,OSError>> {
         let (continuation, completion) = blocksr::continuation::Continuation::<(),_>::new();
         read_completion(dispatch_fd_t::new(self.fd), usize::MAX, os_read_options.into().queue, |data,err| {
             if err==0 {
@@ -90,7 +90,7 @@ impl Read {
     }
 
     ///Reads the entire fd into memory
-    pub async fn all<'a, O: Into<OSReadOptions<'a>>>(&self, os_read_options: O) -> Result<ReadBuffer,OSError> {
+    pub async fn all<'a, O: Into<OSOptions<'a>>>(&self, os_read_options: O) -> Result<ReadBuffer,OSError> {
         let mut buffer = ReadBuffer(Managed::retain(Unmanaged::new()));
         let read_options = os_read_options.into();
         loop {

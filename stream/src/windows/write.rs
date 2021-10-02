@@ -8,17 +8,18 @@ use winbind::Windows::Win32::System::SystemServices::{OVERLAPPED,OVERLAPPED_0,OV
 use winbind::Windows::Win32::Storage::FileSystem::WriteFileEx;
 use winbind::Windows::Win32::System::Diagnostics::Debug::{GetLastError,WIN32_ERROR};
 use std::ffi::c_void;
+use std::marker::PhantomData;
+use std::future::Future;
 
 pub struct Write {
     fd: HANDLE
 }
 ///Backend-specific write options.
 ///
-pub struct OSWriteOptions {
-}
-impl OSWriteOptions {
-    pub fn new() -> OSWriteOptions {
-        OSWriteOptions{}
+pub struct OSOptions<'a>(&'a PhantomData<()>);
+impl<'a> OSOptions<'a> {
+    pub fn new() -> Self {
+        OSOptions(&PhantomData)
     }
 }
 
@@ -87,18 +88,20 @@ impl Write {
         }
     }
     ///A fast path to write static data.
-    pub async fn write_static<O: Into<OSWriteOptions>>(&self, buffer: &'static [u8], _write_options: O) -> Result<(),OSError>{
+    pub fn write_static<'a, O: Into<OSOptions<'a>>>(&self, buffer: &'static [u8], _write_options: O) -> impl Future<Output=Result<(),OSError>> + 'a {
         let fut = Parent::new(self.fd, WriteOp{
             buffer: StaticSlice(buffer)
         });
-        fut.await
+        async {
+            fut.await
+        }
     }
 }
 
 #[cfg(test)] mod test {
     use std::process::{Command, Stdio};
-    use crate::windows::write::{Write, OSWriteOptions};
-    use crate::read::{Read, OSReadOptions};
+    use crate::windows::write::{Write};
+    use crate::read::{Read};
     use std::os::windows::io::AsRawHandle;
 
     #[test] fn sort() {
@@ -107,12 +110,12 @@ impl Write {
             let write_to = c.stdin.take().unwrap();
             let handle = write_to.as_raw_handle();
             let w = Write::new(handle);
-            let fut = w.write_static("a\r\nb\r\nd\r\nc\r\n".as_bytes(), OSWriteOptions::new());
+            let fut = w.write_static("a\r\nb\r\nd\r\nc\r\n".as_bytes(), crate::write::OSOptions::new());
             let r = kiruna::test::test_await(fut, std::time::Duration::from_secs(10));
             r.unwrap();
         }
         let read = Read::new(c.stdout.unwrap());
-        let read_fut = read.all(OSReadOptions::new());
+        let read_fut = read.all(crate::read::OSOptions::new());
         let r = kiruna::test::test_await(read_fut, std::time::Duration::from_secs(10));
         let contiguous = r.unwrap().into_contiguous();
         let slice = contiguous.as_slice();

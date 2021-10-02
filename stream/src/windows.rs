@@ -42,6 +42,7 @@ impl std::error::Error for OSError {
 
 }
 
+
 #[test] fn print_error() {
     use winbind::Windows::Win32::System::Diagnostics::Debug::ERROR_BROKEN_PIPE;
     let e = OSError(ERROR_BROKEN_PIPE);
