@@ -17,9 +17,6 @@ impl std::error::Error for OSError {
 }
 
 
-pub use read::{OSOptions, ContiguousBuffer, ReadBuffer, Read};
-pub use write::Write;
-pub use write::OSOptions;
 use std::fmt::Formatter;
 use priority::Priority;
 use dispatchr::qos::QoS;
