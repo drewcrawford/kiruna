@@ -10,15 +10,22 @@ use winbind::Windows::Win32::System::Diagnostics::Debug::{GetLastError,WIN32_ERR
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::future::Future;
+use priority::Priority;
 
 pub struct Write {
     fd: HANDLE
 }
 ///Backend-specific write options.
-///
+/// note: Lifetime is not used on windows but is included for compatability with macos type
 pub struct OSOptions<'a>(&'a PhantomData<()>);
 impl<'a> OSOptions<'a> {
     pub fn new() -> Self {
+        OSOptions(&PhantomData)
+    }
+}
+impl<'a> From<Priority> for OSOptions<'a> {
+    fn from(_: Priority) -> Self {
+        //todo: use this value in some way
         OSOptions(&PhantomData)
     }
 }
@@ -31,6 +38,13 @@ struct StaticSlice(&'static [u8]);
 impl AsSlice for StaticSlice {
     fn as_slice(&self) -> &[u8] {
         self.0
+    }
+}
+
+struct BoxedSlice(Box<[u8]>);
+impl AsSlice for BoxedSlice {
+    fn as_slice(&self) -> &[u8] {
+        &self.0
     }
 }
 
@@ -88,16 +102,23 @@ impl Write {
         }
     }
     ///A fast path to write static data.
-    pub fn write_static<'a, O: Into<OSOptions<'a>>>(&self, buffer: &'static [u8], _write_options: O) -> impl Future<Output=Result<(),OSError>> + 'a {
-        let fut = Parent::new(self.fd, WriteOp{
+    pub fn write_static<'a, O: Into<OSOptions<'a>>>(&self, buffer: &'static [u8], _write_options: O) -> impl Future<Output=Result<(), OSError>> + 'a {
+        let fut = Parent::new(self.fd, WriteOp {
             buffer: StaticSlice(buffer)
         });
         async {
             fut.await
         }
     }
+    pub fn write_boxed<'a, O: Into<OSOptions<'a>>>(&self, buffer: Box<[u8]>, _write_options: O) -> impl Future<Output=Result<(), OSError>> + 'a {
+        let fut = Parent::new(self.fd, WriteOp {
+            buffer: BoxedSlice(buffer),
+        });
+        async {
+            fut.await
+        }
+    }
 }
-
 #[cfg(test)] mod test {
     use std::process::{Command, Stdio};
     use crate::windows::write::{Write};
