@@ -2,13 +2,13 @@ use crate::windows::OSError;
 use std::os::windows::io::{IntoRawHandle, RawHandle};
 use std::mem::{MaybeUninit};
 use std::ffi::c_void;
-use winbind::Windows::Win32::System::SystemServices::{OVERLAPPED,OVERLAPPED_0,OVERLAPPED_0_0};
+use windows::Win32::System::IO::{OVERLAPPED,OVERLAPPED_0,OVERLAPPED_0_0};
 use std::pin::Pin;
 use std::task::{Poll};
-use winbind::Windows::Win32::System::Diagnostics::Debug::GetLastError;
-use winbind::Windows::Win32::Foundation::HANDLE;
+use windows::Win32::Foundation::GetLastError;
+use windows::Win32::Foundation::HANDLE;
 use std::marker::{PhantomPinned, PhantomData};
-use winbind::Windows::Win32::System::Diagnostics::Debug::WIN32_ERROR;
+use windows::Win32::Foundation::WIN32_ERROR;
 use crate::windows::overlapped::{PayloadTrait, Parent};
 use priority::Priority;
 
@@ -100,7 +100,7 @@ impl ReadChild {
                 },
                 hEvent,
             };
-            use winbind::Windows::Win32::Storage::FileSystem::ReadFileEx;
+            use windows::Win32::Storage::FileSystem::ReadFileEx;
             //note that on windows, this will return on the current thread, therefore we don't have to deal with Send etc
             let next_write = as_mut.buffer.0.as_mut_ptr().add(as_mut.buffer.0.len());
 
@@ -130,14 +130,14 @@ impl Read {
 
     ///Reads the entire fd into memory
     pub async fn all<'a, O: Into<OSOptions<'a>>>(&self, _os_read_options: O) -> Result<Buffer,OSError> {
-        let as_handle =  winbind::Windows::Win32::Foundation::HANDLE(self.fd as isize);
+        let as_handle =  windows::Win32::Foundation::HANDLE(self.fd as isize);
             let fut = Parent::new(as_handle, ReadChild {
                 buffer: Buffer(Vec::with_capacity(READ_SIZE)),
                 _pinned: Default::default()
             });
 
             let result = fut.await;
-            use winbind::Windows::Win32::System::Diagnostics::Debug::ERROR_BROKEN_PIPE;
+            use windows::Win32::Foundation::ERROR_BROKEN_PIPE;
             match result {
                 //this is really a success message in this context, basically EOF
                 Err((OSError(ERROR_BROKEN_PIPE),new_buffer)) => {

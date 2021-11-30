@@ -8,4 +8,4 @@ edition = "2018"
 [dependencies]
 
 [target.'cfg(target_os="windows")'.dependencies]
-winbind = {path = "../winbind"}
+windows = "~0"

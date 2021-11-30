@@ -54,3 +54,26 @@ impl<O, E, F> KirunaPanic for F where F: Future<Output=Result<O, E>> {
 pub mod prelude {
     pub use super::KirunaPanic;
 }
+
+///A future which is not implemented.
+///
+/// This macro implements [std::future::Future] for any `Output`, by calling `todo!()`.
+#[macro_export]
+macro_rules! todo_future {
+    ($ty:ty) => {
+        {
+            use core::task::Poll;
+            use core::task::Context;
+            use std::pin::Pin;
+            struct TodoFuture;
+            impl Future for TodoFuture {
+                type Output = $ty;
+                fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+                    todo!()
+                }
+            }
+            //expr
+            TodoFuture
+        }
+    }
+}

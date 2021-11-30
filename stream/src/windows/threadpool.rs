@@ -7,15 +7,15 @@
 
 #[derive(Copy,Clone)]
 pub struct TaskHandle;
-use winbind::Windows::Win32::Foundation::HANDLE;
+use windows::Win32::Foundation::HANDLE;
 use once_cell::sync::OnceCell;
 use std::sync::mpsc::{Receiver, sync_channel, SyncSender};
 
 struct WinSemaphore(HANDLE);
 impl WinSemaphore {
     fn new() -> Self {
-        use winbind::Windows::Win32::System::Threading::CreateSemaphoreA;
-        use winbind::Windows::Win32::Foundation::PSTR;
+        use windows::Win32::System::Threading::CreateSemaphoreA;
+        use windows::Win32::Foundation::PSTR;
         let handle = unsafe{ CreateSemaphoreA(std::ptr::null_mut(), 0, 2, PSTR(std::ptr::null_mut()))};
         assert!(handle.0 != 0);
         Self(handle)
@@ -23,7 +23,7 @@ impl WinSemaphore {
 }
 impl Drop for WinSemaphore {
     fn drop(&mut self) {
-        use winbind::Windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::Foundation::CloseHandle;
         let r = unsafe{ CloseHandle(self.0)};
         assert!(r.0 != 0)
     }
@@ -47,10 +47,10 @@ impl WorkerThread {
     }
     fn in_thread(&self) {
         loop {
-            use winbind::Windows::Win32::System::Threading::WaitForSingleObjectEx;
+            use windows::Win32::System::Threading::WaitForSingleObjectEx;
             //enter an alertable wait state
             let reason = unsafe{ WaitForSingleObjectEx(self.semaphore.0, u32::MAX, true)};
-            use winbind::Windows::Win32::System::Threading::WAIT_OBJECT_0;
+            use windows::Win32::System::Threading::WAIT_OBJECT_0;
             if reason == WAIT_OBJECT_0 {
                 //at this point, we have woken because some fn was scheduled
                 //(there are other reasons we might wake, in particular, AIO completion)
@@ -73,7 +73,7 @@ impl Threadpool {
     fn send<F>(&self, f: F) where F: FnOnce(TaskHandle) -> () + 'static + Send {
         self.sender.send(Box::new(f)).unwrap();
         //evidently you 'release' a sempahore to signal it in win32
-        use winbind::Windows::Win32::System::Threading::ReleaseSemaphore;
+        use windows::Win32::System::Threading::ReleaseSemaphore;
         unsafe{ ReleaseSemaphore(self.worker.semaphore.0, 1, std::ptr::null_mut())};
     }
 }

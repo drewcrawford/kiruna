@@ -1,12 +1,12 @@
 use crate::OSError;
-use winbind::Windows::Win32::Foundation::HANDLE;
+use windows::Win32::Foundation::HANDLE;
 use crate::windows::overlapped::{PayloadTrait, Parent};
 use std::pin::Pin;
 use std::mem::MaybeUninit;
 use std::task::Poll;
-use winbind::Windows::Win32::System::SystemServices::{OVERLAPPED,OVERLAPPED_0,OVERLAPPED_0_0};
-use winbind::Windows::Win32::Storage::FileSystem::WriteFileEx;
-use winbind::Windows::Win32::System::Diagnostics::Debug::{GetLastError,WIN32_ERROR};
+use windows::Win32::System::IO::{OVERLAPPED,OVERLAPPED_0,OVERLAPPED_0_0};
+use windows::Win32::Storage::FileSystem::WriteFileEx;
+use windows::Win32::Foundation::{GetLastError,WIN32_ERROR};
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::future::Future;
