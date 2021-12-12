@@ -3,6 +3,7 @@
 members = [
     "stream",
     "priority",
+    "join",
 ]
 
 [package]
@@ -22,10 +23,11 @@ test = []
 # Various API to work with futures
 futures = []
 # API to join futures
-join = []
+join = ["kiruna_join"]
 all = ["sync","io_stream","test","futures","join","io_seek"]
 
 [dependencies]
 stream = {path = "stream", optional=true}
 priority = {path = "priority" }
 seek = {path = "seek", optional=true}
+kiruna_join = {path = "join",optional=true}
