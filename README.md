@@ -125,7 +125,8 @@ profiling, debugging, and incrementally adopting OS innovation.
 Kiruna is "batteries included but off by default".  When you build kiruna you build basically nothing,
 to do something you need to turn it on.  Table of features:
 
-* `io_stream` implements the [io::stream] personality (only one that's implemented so far)
+* `io_stream` implements the [io::stream] personality
+* `io_seek` implements the [io::seek] personality.
 * `sync` implements the default single-threaded [Executor].  Note that individual operations generally have some 'other' way to
   do concurrency, so this is the right default for small to medium workloads.
 * `test` is the [world's smallest async 'runtime'](https://github.com/drewcrawford/kiruna/blob/f516f2ad8f493577b0fd2a6f2feef8bde35a8a30/src/test.rs#L23), which polls your futures in a busyloop.
@@ -138,7 +139,7 @@ to do something you need to turn it on.  Table of features:
 
 Coming someday:
 * Additional runtimes, such as multithreaded
-* Additional personalities, like files or sockets
+* Additional personalities, like sockets
 * Additional priorities
 
 Out of scope:
