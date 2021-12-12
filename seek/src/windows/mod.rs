@@ -92,14 +92,16 @@ impl Read {
         let param = forward_slash_path.into_parameter_string(release_pool);
         let path_param = unsafe{param.into_hstring_trampoline(&mut header)};
         let storage_file = StorageFile::GetFileFromPathAsync(&path_param)?;
-        //todo: we could join GetBasicProperties and OpenSequentialReadAsync.
         let future = AsyncFuture::new(storage_file);
         let storage_file = future.await?;
-        let properties = AsyncFuture::new(storage_file.GetBasicPropertiesAsync()?).await?;
+        let properties_future = AsyncFuture::new(storage_file.GetBasicPropertiesAsync()?);
+        let input_stream_future = AsyncFuture::new(storage_file.OpenSequentialReadAsync()?);
+        let (properties,input_stream) = kiruna_join::try_join2(properties_future, input_stream_future).await.map_err(|e| e.merge())?;
+
         let capacity = properties.Size().unwrap();
         let capacity_u32 = capacity as u32;
         let buffer = WinBuffer::Create(capacity_u32)?;
-        let input_stream = AsyncFuture::new(storage_file.OpenSequentialReadAsync()?).await?;
+
         let read_operation = input_stream.ReadAsync(buffer,capacity_u32,InputStreamOptions::default())?;
         let read_buffer = AsyncFuture::new(read_operation).await?;
         let public_buffer = Buffer::new(read_buffer);
