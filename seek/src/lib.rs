@@ -9,4 +9,4 @@ A personality based on async reads/writes.  This is generally preferred where
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]
-pub use crate::windows::Read;
+pub use crate::windows::{Read,Error};
