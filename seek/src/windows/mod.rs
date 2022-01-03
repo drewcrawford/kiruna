@@ -10,7 +10,6 @@ For other cases, consider memory-mapping the file.
 This personality is implemented only on Windows.  All APIs should be considered unstable.
 
 */
-mod async_future;
 mod ibuffer;
 
 use std::borrow::Cow;
@@ -19,7 +18,7 @@ use windows::Storage::StorageFile;
 use pcore::string::IntoParameterString;
 use pcore::release_pool::{ReleasePool};
 use std::mem::MaybeUninit;
-use crate::windows::async_future::AsyncFuture;
+use winfuture::AsyncFuture;
 use std::fmt::Formatter;
 use windows::Storage::Streams::{IBuffer, InputStreamOptions};
 use windows::Storage::Streams::Buffer as WinBuffer;
@@ -30,7 +29,7 @@ pub enum Error {
     #[error("Windows error {0}")]
     WindowsCore(#[from] WindowsCoreError),
     #[error("Error during async operation {0}")]
-    Async(#[from] async_future::Error),
+    Async(#[from] winfuture::Error),
 }
 //additional trampoline through WindowsCoreError
 impl From<windows::core::Error> for Error {

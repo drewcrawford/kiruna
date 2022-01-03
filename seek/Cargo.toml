@@ -8,10 +8,11 @@ edition = "2021"
 [dependencies]
 thiserror = "~1"
 pcore = {git = "https://github.com/drewcrawford/pcore"}
-#pcore = {path = "../../pcore"}
+
 [target.'cfg(target_os="windows")'.dependencies]
 windows = {version = "~0",features=["Storage","Foundation","alloc","Storage_Streams","Storage_FileProperties"]}
 kiruna_join = {path = "../join"}
+winfuture = {git = "https://github.com/drewcrawford/winfuture"}
 
 [dev-dependencies]
 kiruna = {path = "../", features=["test"]}
