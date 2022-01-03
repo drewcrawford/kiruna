@@ -101,7 +101,7 @@ impl Read {
         let capacity_u32 = capacity as u32;
         let buffer = WinBuffer::Create(capacity_u32)?;
 
-        let read_operation = input_stream.ReadAsync(buffer,capacity_u32,InputStreamOptions::default())?;
+        let read_operation = input_stream.ReadAsync(buffer,capacity_u32,InputStreamOptions::None)?;
         let read_buffer = AsyncFuture::new(read_operation).await?;
         let public_buffer = Buffer::new(read_buffer);
         Ok(public_buffer)

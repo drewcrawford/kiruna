@@ -1,8 +1,13 @@
+use std::fmt::Formatter;
 use windows::Storage::Streams::IBuffer;
 use windows::Win32::System::WinRT::IBufferByteAccess;
 use windows::core::Interface;
-#[derive(Debug)]
 pub struct Buffer(IBuffer);
+impl std::fmt::Debug for Buffer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("Buffer(length={})",self.0.Length().unwrap()))
+    }
+}
 impl Buffer {
     pub fn as_slice(&self) -> &[u8] {
         let length = self.0.Length().unwrap().try_into().unwrap();
