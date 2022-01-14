@@ -148,11 +148,7 @@ Out of scope:
 */
 
 #[cfg(feature="sync")]
-mod sync;
-
-#[cfg(feature="sync")]
-pub use sync::executor::Executor;
-
+pub mod sync;
 
 #[cfg(any(test,feature="test"))]
 pub mod test;
@@ -163,5 +159,7 @@ pub mod io;
 pub mod futures;
 #[cfg(feature="join")]
 pub mod join;
+#[cfg(any(feature="sync",feature="test"))]
+mod fake_waker;
 
 pub use priority::Priority;
