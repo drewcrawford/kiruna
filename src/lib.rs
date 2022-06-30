@@ -143,7 +143,8 @@ Coming someday:
 * Additional priorities
 
 Out of scope:
-* Lesser-used IO, like multiprocess communication.  Stay tuned for future crates!
+* Lesser-used IO, like multiprocess communication.
+  * See [command-rs](https://github.com/drewcrawford/command-rs) for a process implementation
 * High-level IO, like TLS or HTTP
 */
 
