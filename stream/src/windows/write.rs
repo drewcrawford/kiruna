@@ -1,12 +1,12 @@
 use crate::OSError;
-use winbind::Windows::Win32::Foundation::HANDLE;
+use windows::Win32::Foundation::HANDLE;
 use crate::windows::overlapped::{PayloadTrait, Parent};
 use std::pin::Pin;
 use std::mem::MaybeUninit;
 use std::task::Poll;
-use winbind::Windows::Win32::System::SystemServices::{OVERLAPPED,OVERLAPPED_0,OVERLAPPED_0_0};
-use winbind::Windows::Win32::Storage::FileSystem::WriteFileEx;
-use winbind::Windows::Win32::System::Diagnostics::Debug::{GetLastError,WIN32_ERROR};
+use windows::Win32::System::IO::{OVERLAPPED,OVERLAPPED_0,OVERLAPPED_0_0};
+use windows::Win32::Storage::FileSystem::WriteFileEx;
+use windows::Win32::Foundation::{GetLastError};
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::future::Future;
@@ -86,7 +86,7 @@ impl<Slice: AsSlice> PayloadTrait for WriteOp<Slice> {
     }
     fn resume_op(self: Pin<&mut Self>, error_code: u32, _bytes_transferred: u32, _handle: HANDLE, _overlapped: Pin<&mut OVERLAPPED>, _h_event: HANDLE, _completion: unsafe extern "system" fn(u32, u32, *mut OVERLAPPED)) -> Poll<Result<Self::Ok, Self::Failure>> {
         if error_code != 0 {
-            Poll::Ready(Err(OSError(WIN32_ERROR(error_code))))
+            Poll::Ready(Err(OSError(error_code)))
         }
         else {
             Poll::Ready(Ok(()))

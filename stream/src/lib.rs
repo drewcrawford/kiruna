@@ -8,4 +8,4 @@ pub use macos::*;
 mod windows;
 
 #[cfg(target_os = "windows")]
-pub use windows::*;
+pub use crate::windows::*;

@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::time::Duration;
 use std::thread::{spawn, sleep};
 use std::sync::{Arc, Mutex};
-use kiruna::Executor;
+use kiruna::sync::Executor;
 
 struct SharedState {
     completed: bool,

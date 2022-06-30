@@ -9,9 +9,9 @@ handed to the [Parent] type.
 use std::sync::{Arc, Mutex};
 use std::task::{Poll, Waker, Context};
 use std::mem::MaybeUninit;
-use winbind::Windows::Win32::Foundation::HANDLE;
+use windows::Win32::Foundation::HANDLE;
 use crate::windows::threadpool::{TaskHandle, add_task, remove_task};
-use winbind::Windows::Win32::System::SystemServices::OVERLAPPED;
+use windows::Win32::System::IO::OVERLAPPED;
 use std::future::Future;
 use std::pin::Pin;
 

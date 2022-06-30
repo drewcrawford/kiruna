@@ -1,15 +1,10 @@
-use std::task::{Wake, Poll, Waker, Context};
+use std::task::{Poll, Waker, Context};
 use std::sync::Arc;
 use std::future::Future;
 use std::time::{Duration, Instant};
+use super::fake_waker::FakeWaker;
 
-//fake waker purely for debug purposes
-pub(crate) struct FakeWaker;
-impl Wake for FakeWaker {
-    fn wake(self: Arc<Self>) {
-        //nothing
-    }
-}
+
 ///A very silly single poll designed for tests
 pub fn test_poll<F: Future>(future: F) -> Poll<F::Output> {
     let fake_waker = Arc::new(FakeWaker);
@@ -19,7 +14,11 @@ pub fn test_poll<F: Future>(future: F) -> Poll<F::Output> {
     pinned.as_mut().poll(&mut as_context)
 }
 ///A very silly executor designed for tests.
-pub fn test_await<F: Future>(future: F, timeout: Duration) -> F::Output{
+///
+/// Compare this with [sync::block], which is similar, but doesn't panic.
+/// I am leaving these implementations separate for now as I suspect they might
+/// diverge in the future.
+pub fn test_await<F: Future>(future: F, timeout: Duration) -> F::Output {
     let fake_waker = Arc::new(FakeWaker);
     let as_waker: Waker = fake_waker.into();
     let mut as_context = Context::from_waker(&as_waker);
