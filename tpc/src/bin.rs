@@ -30,9 +30,9 @@ I think reimplementing this and interfacing with the OS at the thread level make
 use std::ffi::c_void;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{Ordering};
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use once_cell::sync::OnceCell;
 use crate::platform::*;
 
@@ -56,6 +56,9 @@ A brief examination also suggests they use locks, which I am somewhat skeptical
 about for the workload.  I would be willing to believe benchmarks if I could replicate them, but I cannot.
  */
 use crossbeam_channel::{Receiver, Sender};
+use rand::{Rng, SeedableRng};
+use rand::distributions::Alphanumeric;
+use crate::global::{GlobalState, ThreadCounts};
 
 #[derive(Copy,Clone)]
 pub enum WhichBin {
@@ -77,49 +80,11 @@ pub struct Bin {
     sender: Sender<ThreadMessage>,
     receiver: Receiver<ThreadMessage>,
     which_bin: WhichBin,
-    idle_timer: Timer,
+    _idle_timer: Timer,
 }
 
-///Special statistics type, can be encoded into a u64 for atomic ops
-struct ThreadCounts {
-    user_waiting: u16,
-}
-impl ThreadCounts {
-    fn new() -> ThreadCounts { Self { user_waiting: 0}}
-}
-impl From<u64> for ThreadCounts {
-    fn from(u: u64) -> Self {
-        ThreadCounts {
-            user_waiting: (u & 0xffffffff) as u16
-        }
-    }
-}
-impl From<ThreadCounts> for u64 {
-    fn from(t: ThreadCounts) -> Self {
-        t.user_waiting as u64
-    }
-}
+const USER_WAITING_MIN_THREADS:u16 = 1;
 
-struct GlobalState {
-    physical_cpus: u16,
-    //encoding of ThreadCounts type.
-    thread_counts: AtomicU64,
-}
-impl GlobalState {
-    fn global() -> &'static GlobalState {
-        static GLOBAL_STATE: OnceCell::<GlobalState> = OnceCell::new();
-        GLOBAL_STATE.get_or_init( ||{
-            GlobalState::new()
-        })
-    }
-    fn new() -> GlobalState {
-        let physical_cpus = physical_cpus();
-        GlobalState {
-            physical_cpus: physical_cpus,
-            thread_counts: AtomicU64::new(ThreadCounts::new().into()),
-        }
-    }
-}
 
 struct UserWaitingBinWaker {
 }
@@ -127,17 +92,17 @@ impl UserWaitingBinWaker {
     fn waker() -> Waker {
         unsafe{Waker::from_raw(Self::raw_waker())}
     }
-    fn clone(data: *const ()) -> RawWaker {
+    fn clone(_data: *const ()) -> RawWaker {
         todo!()
     }
-    fn wake(data: *const ()) {
+    fn wake(_data: *const ()) {
         todo!()
     }
-    fn wake_by_ref(data: *const ()) {
+    fn wake_by_ref(_data: *const ()) {
         todo!()
     }
-    fn drop(data: *const ()) {
-        todo!()
+    fn drop(_data: *const ()) {
+        //todo!() nothing to do at the moment
     }
 
     const VTABLE: RawWakerVTable = RawWakerVTable::new(Self::clone, Self::wake, Self::wake_by_ref, Self::drop);
@@ -146,19 +111,52 @@ impl UserWaitingBinWaker {
         RawWaker::new(std::ptr::null(), &Self::VTABLE)
     }
 }
+fn log_time(str: String) {
+    let instant = Instant::now();
+    println!("{instant:?}:{str}");
+}
 
 fn thread_user_waiting_entrypoint_fn() {
+    /*
+    The amount of time a thread will wait before shutting down.
+
+    Note that this value is considered in the context of a local thread, but threads only evaluate this when asked by the bin.
+    For a thread to shutdown, it must both be idle for the specified time and be asked to shutdown by the bin.
+     */
+    #[cfg(test)]
+    const TARGET_IDLE_TIME: Duration = Duration::from_millis(100);
+    #[cfg(not(test))]
+    const TARGET_IDLE_TIME: Duration = Duration::from_secs(1);
+
     let bin = Bin::user_waiting();
     let waker = UserWaitingBinWaker::waker();
     let mut context = Context::from_waker(&waker);
-
+    let mut last_useful = Instant::now();
+    let thread_debug_id: String =  rand::rngs::StdRng::from_entropy().sample_iter(&Alphanumeric).take(5).map(char::from).collect();
+    log_time(format!("thread_user_waiting_entrypoint_fn {thread_debug_id:?}"));
     loop {
-        let mut f = bin.receiver.recv().unwrap();
+        log_time(format!("worker thread {thread_debug_id:?} recv"));
+        let f = bin.receiver.recv().unwrap();
+        log_time(format!("worker thread {thread_debug_id:?} recv done"));
+
         match f {
             ThreadMessage::Idle => {
-                todo!()
+                log_time(format!("worker thread {thread_debug_id:?} sees idle message"));
+                if last_useful.elapsed() > TARGET_IDLE_TIME {
+                    let update_result = GlobalState::global().update_thread_counts(|counts| {
+                        if counts.user_waiting > USER_WAITING_MIN_THREADS {
+                            counts.user_waiting -= 1;
+                        }
+                    });
+                    if update_result.is_ok() {
+                        log_time(format!("worker thread {thread_debug_id:?} shutdown"));
+                        return;
+                    }
+                }
+                log_time(format!("worker thread {thread_debug_id:?} WONT shutdown"));
             }
             ThreadMessage::Work(mut future) => {
+                log_time(format!("worker thread {thread_debug_id:?} doing work"));
                 match future.as_mut().poll(&mut context) {
                     Poll::Ready(_) => {
                         //done!
@@ -167,6 +165,8 @@ fn thread_user_waiting_entrypoint_fn() {
                         todo!()
                     }
                 }
+                log_time(format!("worker thread {thread_debug_id:?} done with work"));
+                last_useful = Instant::now();
             }
 
         }
@@ -174,9 +174,23 @@ fn thread_user_waiting_entrypoint_fn() {
     }
 }
 
-extern "C" fn user_waiting_timer_callback(arg: *mut c_void) {
-    println!("timer");
-    Bin::user_waiting().sender.send(ThreadMessage::Idle).unwrap();
+extern "C" fn user_waiting_timer_callback(_arg: *mut c_void) {
+    //We want to send out as many messages as reasonable.
+    //Note that we don't have to get this exactly
+    log_time(format!("timer"));
+    let thread_counts: ThreadCounts = GlobalState::global().read_thread_counts();
+    //the idea here is we gently avoid filling the queue.  The actual policy tends to be enforced by the workers.
+    //This is because, in theory, the timer can execute faster than workers.  It's possible for multiple timers
+    //to run before a worker is listening.
+    if thread_counts.user_waiting > USER_WAITING_MIN_THREADS { //leave some threads
+        log_time(format!("sending idle message to {} of {} threads",thread_counts.user_waiting/2,thread_counts.user_waiting));
+        for _ in 0..thread_counts.user_waiting / 2 {
+            //ask up to half the threads to shut down.
+            log_time(format!("send idle message"));
+            Bin::user_waiting().sender.send(ThreadMessage::Idle).unwrap();
+        }
+    }
+
 }
 
 impl Bin {
@@ -184,19 +198,29 @@ impl Bin {
         static USER_WAITING_BIN: OnceCell<Bin> = OnceCell::new();
         
         USER_WAITING_BIN.get_or_init(|| {
-            let (sender, receiver) = crossbeam_channel::bounded(10);
+            let (sender, receiver) = crossbeam_channel::bounded(1000);
             Bin {
               sender: sender,
                 receiver,
                 which_bin: WhichBin::UserWaiting,
-                idle_timer: Timer::new(user_waiting_timer_callback, Duration::from_secs(1), Duration::from_secs(30))
+                _idle_timer: Timer::new(user_waiting_timer_callback, Duration::from_secs(10), Duration::from_secs(60))
           }  
         })
     }
 
+    //homogeneous futures array
     pub fn spawn<const LENGTH: usize, F: Future<Output=()> + Send + 'static>(&'static self, future: [F; LENGTH]) {
         self.enforce_spare_thread_policy(LENGTH);
         for task in future {
+            let message = ThreadMessage::Work(Box::pin(task));
+            self.sender.send(message).unwrap();
+        }
+    }
+
+    //heterogeneous array
+    pub fn spawn_mixed<const LENGTH: usize>(&'static self, futures: [HeapFuture; LENGTH]) {
+        self.enforce_spare_thread_policy(LENGTH);
+        for task in futures {
             let message = ThreadMessage::Work(Box::pin(task));
             self.sender.send(message).unwrap();
         }
@@ -222,8 +246,8 @@ impl Bin {
                 //In this case, we need to launch some threads.  We promised we would go up to proposed_threads, so the launch amount is
                 let old_threadcount: ThreadCounts = old_threads.into();
                 let launch_amount = proposed_threads - old_threadcount.user_waiting;
-                println!("launching {launch_amount} new threads");
-                for t in 0..launch_amount {
+                log_time(format!("launching {launch_amount} new threads"));
+                for _ in 0..launch_amount {
                     spawn_thread(self.which_bin, thread_user_waiting_entrypoint_fn )
                 }
             }
@@ -236,11 +260,40 @@ impl Bin {
 }
 
 #[cfg(test)] mod tests {
-    use std::time::Duration;
+    use std::time::{Duration};
     use crate::Bin;
+    use crate::bin::{HeapFuture, user_waiting_timer_callback};
+    use crate::global::GlobalState;
 
-    #[test] fn test_timer() {
+
+    #[test] fn thread_policy() {
         let bin = Bin::user_waiting();
-        std::thread::sleep(Duration::from_secs(10));
+        //more cores than I have.  Your mileage may vary
+        let all_tasks = [
+            Box::pin(async move {}) as HeapFuture,
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+            Box::pin(async move {}),
+        ];
+        bin.spawn_mixed(all_tasks);
+
+        let thread_counts = GlobalState::global().read_thread_counts();
+        assert!(thread_counts.user_waiting == GlobalState::global().physical_cpus);
+
+        //wait for threads to reach their idle state
+        std::thread::sleep(Duration::from_millis(250));
+        //simulate varoius timer fires
+        for _ in 0..10 {
+            user_waiting_timer_callback(std::ptr::null_mut());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        assert_eq!(GlobalState::global().read_thread_counts().user_waiting, 1);
     }
 }

@@ -51,7 +51,7 @@ pub fn spawn_thread<F: FnOnce() + Send + 'static>(bin: WhichBin, f: F) {
         assert!(r==0);
 
         let qos_class = match bin {
-            WhichBin::UserWaiting =>  QosClassT::USER_INITIATED,
+            WhichBin::UserWaiting =>  QosClassT::USER_INTERACTIVE,
         };
         let r = pthread_attr_set_qos_class_np(attr.assume_init_mut(), qos_class, RelativePriority::NEW_THREADS);
         assert!(r==0);

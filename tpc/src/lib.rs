@@ -91,6 +91,7 @@ extern crate core;
 mod bin;
 
 mod platform;
+mod global;
 
 use std::future::Future;
 use priority::Priority;
