@@ -160,7 +160,7 @@ pub mod io;
 pub mod futures;
 #[cfg(feature="join")]
 pub mod join;
-#[cfg(any(feature="sync",feature="test"))]
+#[cfg(any(test,feature="sync",feature="test"))]
 mod fake_waker;
 
 pub use priority::Priority;
