@@ -29,7 +29,6 @@ I think reimplementing this and interfacing with the OS at the thread level make
  */
 use std::ffi::c_void;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{Ordering};
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use std::time::{Duration, Instant};
@@ -56,16 +55,15 @@ A brief examination also suggests they use locks, which I am somewhat skeptical
 about for the workload.  I would be willing to believe benchmarks if I could replicate them, but I cannot.
  */
 use crossbeam_channel::{Receiver, Sender};
-use rand::{Rng, SeedableRng};
-use rand::distributions::Alphanumeric;
+
 use crate::global::{GlobalState, ThreadCounts};
+use crate::HeapFuture;
 
 #[derive(Copy,Clone)]
 pub enum WhichBin {
     UserWaiting,
 }
 
-type HeapFuture = Pin<Box<dyn Future<Output=()> + Send>>;
 
 enum ThreadMessage {
     Work(HeapFuture),
@@ -111,6 +109,21 @@ impl UserWaitingBinWaker {
         RawWaker::new(std::ptr::null(), &Self::VTABLE)
     }
 }
+#[cfg(feature="thread_stories")]
+macro_rules! log_time {
+    (
+        $($arg:tt)*
+    ) => {
+        log_time($($arg)*)
+    }
+}
+#[cfg(not(feature = "thread_stories"))]
+macro_rules! log_time {
+    (
+        $($arg:tt)*
+    ) => {
+    }
+}
 fn log_time(str: String) {
     let instant = Instant::now();
     println!("{instant:?}:{str}");
@@ -132,16 +145,22 @@ fn thread_user_waiting_entrypoint_fn() {
     let waker = UserWaitingBinWaker::waker();
     let mut context = Context::from_waker(&waker);
     let mut last_useful = Instant::now();
-    let thread_debug_id: String =  rand::rngs::StdRng::from_entropy().sample_iter(&Alphanumeric).take(5).map(char::from).collect();
-    log_time(format!("thread_user_waiting_entrypoint_fn {thread_debug_id:?}"));
+    #[cfg(feature="thread_stories")]
+        use rand::{Rng, SeedableRng};
+    #[cfg(feature = "thread_stories")]
+        use rand::distributions::Alphanumeric;
+    #[cfg(feature = "thread_stories")]
+        let thread_debug_id: String =  rand::rngs::StdRng::from_entropy().sample_iter(&Alphanumeric).take(5).map(char::from).collect();
+
+    log_time!(format!("thread_user_waiting_entrypoint_fn {thread_debug_id:?}"));
     loop {
-        log_time(format!("worker thread {thread_debug_id:?} recv"));
+        log_time!(format!("worker thread {thread_debug_id:?} recv"));
         let f = bin.receiver.recv().unwrap();
-        log_time(format!("worker thread {thread_debug_id:?} recv done"));
+        log_time!(format!("worker thread {thread_debug_id:?} recv done"));
 
         match f {
             ThreadMessage::Idle => {
-                log_time(format!("worker thread {thread_debug_id:?} sees idle message"));
+                log_time!(format!("worker thread {thread_debug_id:?} sees idle message"));
                 if last_useful.elapsed() > TARGET_IDLE_TIME {
                     let update_result = GlobalState::global().update_thread_counts(|counts| {
                         if counts.user_waiting > USER_WAITING_MIN_THREADS {
@@ -149,14 +168,14 @@ fn thread_user_waiting_entrypoint_fn() {
                         }
                     });
                     if update_result.is_ok() {
-                        log_time(format!("worker thread {thread_debug_id:?} shutdown"));
+                        log_time!(format!("worker thread {thread_debug_id:?} shutdown"));
                         return;
                     }
                 }
-                log_time(format!("worker thread {thread_debug_id:?} WONT shutdown"));
+                log_time!(format!("worker thread {thread_debug_id:?} WONT shutdown"));
             }
             ThreadMessage::Work(mut future) => {
-                log_time(format!("worker thread {thread_debug_id:?} doing work"));
+                log_time!(format!("worker thread {thread_debug_id:?} doing work"));
                 match future.as_mut().poll(&mut context) {
                     Poll::Ready(_) => {
                         //done!
@@ -165,7 +184,7 @@ fn thread_user_waiting_entrypoint_fn() {
                         todo!()
                     }
                 }
-                log_time(format!("worker thread {thread_debug_id:?} done with work"));
+                log_time!(format!("worker thread {thread_debug_id:?} done with work"));
                 last_useful = Instant::now();
             }
 
@@ -177,16 +196,16 @@ fn thread_user_waiting_entrypoint_fn() {
 extern "C" fn user_waiting_timer_callback(_arg: *mut c_void) {
     //We want to send out as many messages as reasonable.
     //Note that we don't have to get this exactly
-    log_time(format!("timer"));
+    log_time!(format!("timer"));
     let thread_counts: ThreadCounts = GlobalState::global().read_thread_counts();
     //the idea here is we gently avoid filling the queue.  The actual policy tends to be enforced by the workers.
     //This is because, in theory, the timer can execute faster than workers.  It's possible for multiple timers
     //to run before a worker is listening.
     if thread_counts.user_waiting > USER_WAITING_MIN_THREADS { //leave some threads
-        log_time(format!("sending idle message to {} of {} threads",thread_counts.user_waiting/2,thread_counts.user_waiting));
+        log_time!(format!("sending idle message to {} of {} threads",thread_counts.user_waiting/2,thread_counts.user_waiting));
         for _ in 0..thread_counts.user_waiting / 2 {
             //ask up to half the threads to shut down.
-            log_time(format!("send idle message"));
+            log_time!(format!("send idle message"));
             Bin::user_waiting().sender.send(ThreadMessage::Idle).unwrap();
         }
     }
@@ -246,7 +265,7 @@ impl Bin {
                 //In this case, we need to launch some threads.  We promised we would go up to proposed_threads, so the launch amount is
                 let old_threadcount: ThreadCounts = old_threads.into();
                 let launch_amount = proposed_threads - old_threadcount.user_waiting;
-                log_time(format!("launching {launch_amount} new threads"));
+                log_time!(format!("launching {launch_amount} new threads"));
                 for _ in 0..launch_amount {
                     spawn_thread(self.which_bin, thread_user_waiting_entrypoint_fn )
                 }
@@ -261,8 +280,8 @@ impl Bin {
 
 #[cfg(test)] mod tests {
     use std::time::{Duration};
-    use crate::Bin;
-    use crate::bin::{HeapFuture, user_waiting_timer_callback};
+    use crate::{Bin, HeapFuture};
+    use crate::bin::{user_waiting_timer_callback};
     use crate::global::GlobalState;
 
 

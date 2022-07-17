@@ -5,7 +5,7 @@ use dispatchr::source::Managed;
 use dispatchr::time::Time;
 
 pub struct Timer {
-    source: dispatchr::source::Managed,
+    _source: dispatchr::source::Managed,
 }
 impl Timer {
     pub fn new(call_me: extern "C" fn(*mut c_void), interval: Duration, leeway: Duration) -> Self {
@@ -15,7 +15,7 @@ impl Timer {
         source.set_event_handler_f(call_me);
         source.resume();
         Self {
-            source,
+            _source: source,
         }
     }
 }

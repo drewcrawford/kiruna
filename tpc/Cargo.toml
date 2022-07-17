@@ -11,4 +11,11 @@ once_cell = "~1"
 #libc = "~0"
 crossbeam-channel = "~0"
 dispatchr = {git = "https://github.com/drewcrawford/dispatchr"}
-rand = "~0"
+
+[dependencies.rand]
+optional = true
+version = "~0"
+
+[features]
+# prints some debug information about what threads are up to
+thread_stories = ["rand"]

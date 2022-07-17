@@ -94,10 +94,14 @@ mod platform;
 mod global;
 
 use std::future::Future;
+use std::pin::Pin;
 use priority::Priority;
 use crate::bin::Bin;
 
 pub struct Executor;
+
+type HeapFuture = Pin<Box<dyn Future<Output=()> + Send>>;
+
 
 impl Executor {
     /**
@@ -114,7 +118,19 @@ impl Executor {
         }
     }
 
-    fn global() -> Executor { Executor }
+    /** Spawns the tasks at the specified priority. */
+    pub fn spawn_mixed<const LENGTH: usize>(&'static self, priority: Priority, futures: [Pin<Box<dyn Future<Output=()> + Send>>; LENGTH]) {
+        match priority {
+            Priority::UserWaiting | Priority::Testing => {
+                Bin::user_waiting().spawn_mixed(futures)
+            }
+            _ => {
+                panic!("Unsupported priority {:?}",priority);
+            }
+        }
+    }
+
+    pub fn global() -> Executor { Executor }
 }
 
 #[test] fn test_spawn() {
