@@ -89,8 +89,8 @@ The general algorithm is:
 extern crate core;
 
 mod bin;
-mod physical_cpus_macos;
-mod thread_create_macos;
+
+mod platform;
 
 use std::future::Future;
 use priority::Priority;

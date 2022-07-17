@@ -27,12 +27,14 @@ implementation.  However then we have the whole Swift runtime to deal with.
 
 I think reimplementing this and interfacing with the OS at the thread level makes the most sense here, even on macOS.
  */
+use std::ffi::c_void;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use std::time::Duration;
 use once_cell::sync::OnceCell;
-use crate::physical_cpus_macos::physical_cpus;
+use crate::platform::*;
 
 /*
 A brief discussion of this dependency.
@@ -54,7 +56,6 @@ A brief examination also suggests they use locks, which I am somewhat skeptical
 about for the workload.  I would be willing to believe benchmarks if I could replicate them, but I cannot.
  */
 use crossbeam_channel::{Receiver, Sender};
-use crate::thread_create_macos::spawn_thread;
 
 #[derive(Copy,Clone)]
 pub enum WhichBin {
@@ -63,13 +64,20 @@ pub enum WhichBin {
 
 type HeapFuture = Pin<Box<dyn Future<Output=()> + Send>>;
 
+enum ThreadMessage {
+    Work(HeapFuture),
+    ///This message is occasionally sent to threads to allow them to think about dying
+    Idle,
+}
+
 /**
 A bin is an object within which we implement work-stealing.
 */
 pub struct Bin {
-    sender: Sender<HeapFuture>,
-    receiver: Receiver<HeapFuture>,
+    sender: Sender<ThreadMessage>,
+    receiver: Receiver<ThreadMessage>,
     which_bin: WhichBin,
+    idle_timer: Timer,
 }
 
 ///Special statistics type, can be encoded into a u64 for atomic ops
@@ -139,6 +147,37 @@ impl UserWaitingBinWaker {
     }
 }
 
+fn thread_user_waiting_entrypoint_fn() {
+    let bin = Bin::user_waiting();
+    let waker = UserWaitingBinWaker::waker();
+    let mut context = Context::from_waker(&waker);
+
+    loop {
+        let mut f = bin.receiver.recv().unwrap();
+        match f {
+            ThreadMessage::Idle => {
+                todo!()
+            }
+            ThreadMessage::Work(mut future) => {
+                match future.as_mut().poll(&mut context) {
+                    Poll::Ready(_) => {
+                        //done!
+                    }
+                    Poll::Pending => {
+                        todo!()
+                    }
+                }
+            }
+
+        }
+
+    }
+}
+
+extern "C" fn user_waiting_timer_callback(arg: *mut c_void) {
+    println!("timer");
+    Bin::user_waiting().sender.send(ThreadMessage::Idle).unwrap();
+}
 
 impl Bin {
     pub fn user_waiting() -> &'static Bin {
@@ -150,6 +189,7 @@ impl Bin {
               sender: sender,
                 receiver,
                 which_bin: WhichBin::UserWaiting,
+                idle_timer: Timer::new(user_waiting_timer_callback, Duration::from_secs(1), Duration::from_secs(30))
           }  
         })
     }
@@ -157,25 +197,11 @@ impl Bin {
     pub fn spawn<const LENGTH: usize, F: Future<Output=()> + Send + 'static>(&'static self, future: [F; LENGTH]) {
         self.enforce_spare_thread_policy(LENGTH);
         for task in future {
-            self.sender.send(Box::pin(task)).unwrap();
+            let message = ThreadMessage::Work(Box::pin(task));
+            self.sender.send(message).unwrap();
         }
     }
-    pub fn thread_entrypoint_fn(&self) {
-        let waker = UserWaitingBinWaker::waker();
-        let mut context = Context::from_waker(&waker);
 
-        loop {
-            let mut f = self.receiver.recv().unwrap();
-            match f.as_mut().poll(&mut context) {
-                Poll::Ready(_) => {
-                    //done!
-                }
-                Poll::Pending => {
-                    todo!()
-                }
-            }
-        }
-    }
     fn enforce_spare_thread_policy(&'static self, coming_soon: usize) {
         let state = GlobalState::global();
         //the number of threads we would want to be active, without any knowledge of what is happening in the system
@@ -198,7 +224,7 @@ impl Bin {
                 let launch_amount = proposed_threads - old_threadcount.user_waiting;
                 println!("launching {launch_amount} new threads");
                 for t in 0..launch_amount {
-                    spawn_thread(self.which_bin, || self.thread_entrypoint_fn() )
+                    spawn_thread(self.which_bin, thread_user_waiting_entrypoint_fn )
                 }
             }
             Err(_) => {
@@ -206,5 +232,15 @@ impl Bin {
             }
         }
 
+    }
+}
+
+#[cfg(test)] mod tests {
+    use std::time::Duration;
+    use crate::Bin;
+
+    #[test] fn test_timer() {
+        let bin = Bin::user_waiting();
+        std::thread::sleep(Duration::from_secs(10));
     }
 }

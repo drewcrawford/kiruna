@@ -10,3 +10,4 @@ priority = {path = "../priority"}
 once_cell = "~1"
 #libc = "~0"
 crossbeam-channel = "~0"
+dispatchr = {git = "https://github.com/drewcrawford/dispatchr"}
