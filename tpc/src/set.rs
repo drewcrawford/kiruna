@@ -33,14 +33,14 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 use crate::{Executor};
 use crate::stories::Story;
 
 type AtomicSpawned = AtomicU32;
-type Spawned = u32;
 struct SharedSet {
-    children_done: AtomicSpawned,
+    children_remaining: AtomicSpawned,
+    waker: Waker,
 }
 
 struct Child<F> {
@@ -56,7 +56,10 @@ impl<F: Future<Output=()>> Future for Child<F> {
         let child = unsafe{self.map_unchecked_mut(|a| &mut a.inner)};
         match child.poll(cx) {
             Poll::Ready(_) => {
-                tmp_shared.children_done.fetch_add(1, Ordering::Relaxed);
+                let r = tmp_shared.children_remaining.fetch_sub(1, Ordering::Relaxed);
+                if r == 1 {
+                    tmp_shared.waker.wake_by_ref();
+                }
                 Poll::Ready(())
             }
             Poll::Pending => {
@@ -70,7 +73,7 @@ impl<F: Future<Output=()>> Future for Child<F> {
 
 enum State<V> {
     NotSpawned(V),
-    Spawned(Arc<SharedSet>,Spawned),
+    Spawned(Arc<SharedSet>),
     Done,
     Invalid
 }
@@ -85,9 +88,9 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        fn poll_thunk(set: &Arc<SharedSet>, spawned: Spawned) -> Poll<()> {
-            let load = set.children_done.load(Ordering::Relaxed);
-            if load == spawned {
+        fn poll_thunk(set: &Arc<SharedSet>) -> Poll<()> {
+            let load = set.children_remaining.load(Ordering::Relaxed);
+            if load == 0 {
                 Poll::Ready(())
             }
             else {
@@ -99,10 +102,14 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
         match peek_state {
             State::NotSpawned(tasks) => {
                 self.story.log("Set spawning".to_string());
-                let shared_state = Arc::new(SharedSet{children_done: AtomicSpawned::new(0)});
-                let iter = tasks.into_iter();
+                //collect the futures up front.  This is because we want to let the child perform the wake to reduce spurious wakes.
+                //but each child needs to know how many children to expect
+                let tasks: Vec<_> = tasks.into_iter().collect();
+                let coming_soon = tasks.len();
                 let bin = Executor::global().bin_for(self.priority);
-                let children = iter.map(|f| {
+                bin.enforce_spare_thread_policy(coming_soon);
+                let shared_state = Arc::new(SharedSet{children_remaining: AtomicSpawned::new(coming_soon.try_into().unwrap()), waker: cx.waker().clone()});
+                let children = tasks.into_iter().map(|f| {
                     //first, we need to box the future.  It might be boxed already, but in a lot of cases
                     //we have a consistent wrapping type we can use here, which is not necessarily boxed.
                     let boxed_child = Box::pin(f);
@@ -119,34 +126,32 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
                     };
                     Box::pin(child)
                 });
-                let (coming_soon, _) = children.size_hint();
-                bin.enforce_spare_thread_policy(coming_soon);
                 let mut spawned = 0;
                 for item in children {
                     bin.spawn_without_hint(item);
                     spawned += 1;
                 }
-                match poll_thunk(&shared_state,spawned) {
+                match poll_thunk(&shared_state) {
                     Poll::Ready(_) => {
                         self.state = State::Done;
                         self.story.log("Set done immediately".to_string());
                         Poll::Ready(())
                     }
                     Poll::Pending => {
-                        self.state = State::Spawned(shared_state, spawned);
+                        self.state = State::Spawned(shared_state);
                         Poll::Pending
                     }
                 }
             }
-            State::Spawned(state,spawned) => {
-                match poll_thunk(&state, spawned) {
+            State::Spawned(state) => {
+                match poll_thunk(&state) {
                     Poll::Ready(_) => {
                         self.story.log("Set done".to_string());
                         self.state = State::Done;
                         Poll::Ready(())
                     }
                     Poll::Pending => {
-                        self.state = State::Spawned(state, spawned);
+                        self.state = State::Spawned(state);
                         Poll::Pending
                     }
                 }
@@ -194,7 +199,7 @@ impl<V> Drop for InternalGuard<V> {
     use std::future::Future;
     use std::pin::Pin;
     use crate::set::set_scoped;
-    use kiruna::test::test_await;
+    use kiruna::test::{test_await,sparse_await};
 
     #[test] fn test_set() {
         let mut v = Vec::new();
@@ -213,5 +218,14 @@ impl<V> Drop for InternalGuard<V> {
 
         let guard = set_scoped(priority::Priority::Testing, v);
         test_await(guard, std::time::Duration::from_secs(2));
+    }
+
+    #[test] fn test_sparse() {
+        let mut v = Vec::new();
+        v.push(Box::pin(async {
+            println!("hello!");
+        } ) as Pin<Box<dyn Future<Output=()> + Send>>);
+        let guard = set_scoped(priority::Priority::Testing, v);
+        sparse_await(guard, std::time::Duration::from_secs(2));
     }
 }
