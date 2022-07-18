@@ -93,6 +93,7 @@ mod bin;
 mod platform;
 mod global;
 pub mod set;
+mod stories;
 
 use std::future::Future;
 use std::pin::Pin;

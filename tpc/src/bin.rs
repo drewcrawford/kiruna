@@ -58,6 +58,7 @@ use crossbeam_channel::{Receiver, Sender};
 
 use crate::global::{GlobalState, ThreadCounts};
 use crate::HeapFuture;
+use crate::stories::Story;
 
 #[derive(Copy,Clone)]
 pub enum WhichBin {
@@ -109,26 +110,7 @@ impl UserWaitingBinWaker {
         RawWaker::new(std::ptr::null(), &Self::VTABLE)
     }
 }
-#[cfg(feature="thread_stories")]
-macro_rules! log_time {
-    (
-        $($arg:tt)*
-    ) => {
-        _log_time($($arg)*)
-    }
-}
-#[cfg(not(feature = "thread_stories"))]
-macro_rules! log_time {
-    (
-        $($arg:tt)*
-    ) => {
-    }
-}
-#[cfg(feature="thread_stories")]
-fn _log_time(str: String) {
-    let instant = Instant::now();
-    println!("{instant:?}:{str}");
-}
+
 
 fn thread_user_waiting_entrypoint_fn() {
     /*
@@ -146,22 +128,17 @@ fn thread_user_waiting_entrypoint_fn() {
     let waker = UserWaitingBinWaker::waker();
     let mut context = Context::from_waker(&waker);
     let mut last_useful = Instant::now();
-    #[cfg(feature="thread_stories")]
-        use rand::{Rng, SeedableRng};
-    #[cfg(feature = "thread_stories")]
-        use rand::distributions::Alphanumeric;
-    #[cfg(feature = "thread_stories")]
-        let thread_debug_id: String =  rand::rngs::StdRng::from_entropy().sample_iter(&Alphanumeric).take(5).map(char::from).collect();
+    let story = Story::new();
 
-    log_time!(format!("thread_user_waiting_entrypoint_fn {thread_debug_id:?}"));
+    story.log(format!("thread_user_waiting_entrypoint_fn"));
     loop {
-        log_time!(format!("worker thread {thread_debug_id:?} recv"));
+        story.log(format!("worker thread recv"));
         let f = bin.receiver.recv().unwrap();
-        log_time!(format!("worker thread {thread_debug_id:?} recv done"));
+        story.log(format!("worker thread recv done"));
 
         match f {
             ThreadMessage::Idle => {
-                log_time!(format!("worker thread {thread_debug_id:?} sees idle message"));
+                story.log(format!("worker thread sees idle message"));
                 let last_check = last_useful.elapsed();
                 if last_check > TARGET_IDLE_TIME {
                     let update_result = GlobalState::global().update_thread_counts(|counts| {
@@ -170,20 +147,20 @@ fn thread_user_waiting_entrypoint_fn() {
                         }
                     });
                     if update_result.is_ok() {
-                        log_time!(format!("worker thread {thread_debug_id:?} shutdown"));
+                        story.log(format!("worker thread shutdown"));
                         return;
                     }
                     else {
-                        log_time!(format!("worker thread {thread_debug_id:?} WONT shutdown as it's the only thread"));
+                        story.log(format!("worker thread WONT shutdown as it's the only thread"));
                     }
                 }
                 else {
-                    log_time!(format!("worker thread {thread_debug_id:?} WONT shutdown as it was recently used {last_check:?}"));
+                    story.log(format!("worker thread WONT shutdown as it was recently used {last_check:?}"));
 
                 }
             }
             ThreadMessage::Work(mut future) => {
-                log_time!(format!("worker thread {thread_debug_id:?} doing work"));
+                story.log(format!("worker thread doing work"));
                 match future.as_mut().poll(&mut context) {
                     Poll::Ready(_) => {
                         //done!
@@ -192,7 +169,7 @@ fn thread_user_waiting_entrypoint_fn() {
                         todo!()
                     }
                 }
-                log_time!(format!("worker thread {thread_debug_id:?} done with work"));
+                story.log(format!("worker thread done with work"));
                 last_useful = Instant::now();
             }
 
@@ -204,16 +181,17 @@ fn thread_user_waiting_entrypoint_fn() {
 extern "C" fn user_waiting_timer_callback(_arg: *mut c_void) {
     //We want to send out as many messages as reasonable.
     //Note that we don't have to get this exactly
-    log_time!(format!("timer"));
+    let story = Story::new();
+    story.log(format!("timer"));
     let thread_counts: ThreadCounts = GlobalState::global().read_thread_counts();
     //the idea here is we gently avoid filling the queue.  The actual policy tends to be enforced by the workers.
     //This is because, in theory, the timer can execute faster than workers.  It's possible for multiple timers
     //to run before a worker is listening.
     if thread_counts.user_waiting > USER_WAITING_MIN_THREADS { //leave some threads
-        log_time!(format!("sending idle message to {} of {} threads",thread_counts.user_waiting/2,thread_counts.user_waiting));
+        story.log(format!("sending idle message to {} of {} threads",thread_counts.user_waiting/2,thread_counts.user_waiting));
         for _ in 0..thread_counts.user_waiting / 2 {
             //ask up to half the threads to shut down.
-            log_time!(format!("send idle message"));
+            story.log(format!("send idle message"));
             Bin::user_waiting().sender.send(ThreadMessage::Idle).unwrap();
         }
     }
@@ -259,6 +237,7 @@ impl Bin {
     }
 
     pub fn enforce_spare_thread_policy(&'static self, coming_soon: usize) {
+        let story = Story::new();
         let state = GlobalState::global();
         //the number of threads we would want to be active, without any knowledge of what is happening in the system
         let proposed_threads = coming_soon.min(state.physical_cpus as usize) as u16;
@@ -278,7 +257,7 @@ impl Bin {
                 //In this case, we need to launch some threads.  We promised we would go up to proposed_threads, so the launch amount is
                 let old_threadcount: ThreadCounts = old_threads.into();
                 let launch_amount = proposed_threads - old_threadcount.user_waiting;
-                log_time!(format!("launching {launch_amount} new threads"));
+                story.log(format!("launching {launch_amount} new threads"));
                 for _ in 0..launch_amount {
                     spawn_thread(self.which_bin, thread_user_waiting_entrypoint_fn )
                 }

@@ -35,6 +35,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::task::{Context, Poll};
 use crate::{Executor};
+use crate::stories::Story;
 
 type AtomicSpawned = AtomicU32;
 type Spawned = u32;
@@ -77,6 +78,7 @@ enum State<V> {
 struct InternalGuard<V> {
     state: State<V>,
     priority: priority::Priority,
+    story: Story,
 }
 
 impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Self: 'a, F: Future<Output=()> + Send + 'a {
@@ -96,6 +98,7 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
         std::mem::swap(&mut self.state, &mut peek_state);
         match peek_state {
             State::NotSpawned(tasks) => {
+                self.story.log("Set spawning".to_string());
                 let shared_state = Arc::new(SharedSet{children_done: AtomicSpawned::new(0)});
                 let iter = tasks.into_iter();
                 let bin = Executor::global().bin_for(self.priority);
@@ -126,6 +129,7 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
                 match poll_thunk(&shared_state,spawned) {
                     Poll::Ready(_) => {
                         self.state = State::Done;
+                        self.story.log("Set done immediately".to_string());
                         Poll::Ready(())
                     }
                     Poll::Pending => {
@@ -137,6 +141,7 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
             State::Spawned(state,spawned) => {
                 match poll_thunk(&state, spawned) {
                     Poll::Ready(_) => {
+                        self.story.log("Set done".to_string());
                         self.state = State::Done;
                         Poll::Ready(())
                     }
@@ -165,7 +170,8 @@ when leaving scope, the runtime will panic.
 pub fn set_scoped<'a,F,V: IntoIterator<Item=F> + Unpin + 'a>(priority: priority::Priority, tasks: V) -> impl Guard + 'a where F: Future<Output=()> + Send {
     InternalGuard {
         state: State::NotSpawned(tasks),
-        priority
+        priority,
+        story: Story::new(),
     }
 }
 impl<V> Drop for InternalGuard<V> {
@@ -206,6 +212,6 @@ impl<V> Drop for InternalGuard<V> {
         }
 
         let guard = set_scoped(priority::Priority::Testing, v);
-        test_await(guard, std::time::Duration::from_millis(1000));
+        test_await(guard, std::time::Duration::from_secs(2));
     }
 }

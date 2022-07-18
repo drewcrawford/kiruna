@@ -7,6 +7,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use crate::global::GlobalState;
+use crate::stories::Story;
 
 struct Smuggle<O>(*mut O);
 impl<O> Clone for Smuggle<O> {
@@ -123,9 +124,12 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
             futures.push(fut);
         }
     }
-    // let fut_len = futures.len();
+    let fut_len = futures.len();
     //println!("launching {fut_len} tasks");
+    let story = Story::new();
+    story.log(format!("vec set await of length {fut_len}"));
     super::set_scoped(priority, futures).await;
+    story.log("vec set complete".to_string());
     unsafe{output.set_len(len)};
     output
 }
@@ -138,7 +142,7 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
         let big_fut = set_sync(priority::Priority::Testing, test_len, Strategy::Jobs(100),|idx| {
             idx
         });
-        let my_vec = test_await(big_fut, std::time::Duration::new(1, 0));
+        let my_vec = test_await(big_fut, std::time::Duration::new(100, 0));
         assert_eq!(my_vec.len(), test_len);
         for (i,item) in my_vec.iter().enumerate() {
             assert_eq!(i,*item);
@@ -153,7 +157,7 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
             }
             val
         });
-        let my_vec = test_await(big_fut, std::time::Duration::new(10, 0));
+        let my_vec = test_await(big_fut, std::time::Duration::new(100, 0));
         assert_eq!(my_vec.len(), test_len);
     }
     #[test] fn build_many_jobs() {
@@ -161,7 +165,7 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
         let big_fut = set_sync(priority::Priority::Testing, test_len, Strategy::Jobs(10_000), |idx| {
             idx
         });
-        let my_vec = test_await(big_fut, std::time::Duration::new(10, 0));
+        let my_vec = test_await(big_fut, std::time::Duration::new(100, 0));
         assert_eq!(my_vec.len(), test_len);
         for (i,item) in my_vec.iter().enumerate() {
             assert_eq!(i,*item);
@@ -172,7 +176,7 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
         let big_fut = set_sync(priority::Priority::Testing, test_len, Strategy::Jobs(1), |idx| {
             idx
         });
-        let my_vec = test_await(big_fut, std::time::Duration::new(10, 0));
+        let my_vec = test_await(big_fut, std::time::Duration::new(100, 0));
         assert_eq!(my_vec.len(), test_len);
         for (i,item) in my_vec.iter().enumerate() {
             assert_eq!(i,*item);
