@@ -92,6 +92,7 @@ mod bin;
 
 mod platform;
 mod global;
+mod set;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -130,7 +131,19 @@ impl Executor {
         }
     }
 
-    pub fn global() -> Executor { Executor }
+
+    pub fn global() -> &'static Executor { &Executor }
+
+    fn bin_for(&'static self, priority: Priority) -> &'static Bin {
+        match priority {
+            Priority::UserWaiting | Priority::Testing => {
+                Bin::user_waiting()
+            }
+            _ => {
+                panic!("Unsuported priority {:?}",priority);
+            }
+        }
+    }
 }
 
 #[test] fn test_spawn() {

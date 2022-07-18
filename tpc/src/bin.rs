@@ -124,6 +124,7 @@ macro_rules! log_time {
     ) => {
     }
 }
+#[cfg(feature="thread_stories")]
 fn log_time(str: String) {
     let instant = Instant::now();
     println!("{instant:?}:{str}");
@@ -245,7 +246,12 @@ impl Bin {
         }
     }
 
-    fn enforce_spare_thread_policy(&'static self, coming_soon: usize) {
+    pub fn spawn_without_hint(&'static self, future: HeapFuture) {
+        let message = ThreadMessage::Work(future);
+        self.sender.send(message).unwrap();
+    }
+
+    pub fn enforce_spare_thread_policy(&'static self, coming_soon: usize) {
         let state = GlobalState::global();
         //the number of threads we would want to be active, without any knowledge of what is happening in the system
         let proposed_threads = coming_soon.min(state.physical_cpus as usize) as u16;

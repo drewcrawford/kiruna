@@ -22,3 +22,6 @@ version = "~0"
 [features]
 # prints some debug information about what threads are up to
 thread_stories = ["rand"]
+
+[dev-dependencies]
+kiruna = {path = "../", features=["test"]}
