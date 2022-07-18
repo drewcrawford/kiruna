@@ -4,7 +4,6 @@ Sets that build vecs of values.
 
 use std::fmt::Debug;
 use std::future::Future;
-use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use crate::global::GlobalState;
@@ -48,9 +47,6 @@ async fn set_sync<F,O: Debug>(priority: priority::Priority, len: usize, f: F) ->
     let raw_ptr = output.as_mut_ptr();
     let divide_by = target_tasks - 1;
     let each_task_up_to = len / divide_by as usize;
-    let f_ref = &f;
-
-
 
     let mut futures = Vec::with_capacity(target_tasks as usize);
     for task in 0..target_tasks {

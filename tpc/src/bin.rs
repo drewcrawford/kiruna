@@ -114,7 +114,7 @@ macro_rules! log_time {
     (
         $($arg:tt)*
     ) => {
-        log_time($($arg)*)
+        _log_time($($arg)*)
     }
 }
 #[cfg(not(feature = "thread_stories"))]
@@ -125,7 +125,7 @@ macro_rules! log_time {
     }
 }
 #[cfg(feature="thread_stories")]
-fn log_time(str: String) {
+fn _log_time(str: String) {
     let instant = Instant::now();
     println!("{instant:?}:{str}");
 }
@@ -292,10 +292,12 @@ impl Bin {
 }
 
 #[cfg(test)] mod tests {
-    use std::time::{Duration};
+    use std::time::{Duration, Instant};
     use crate::{Bin, HeapFuture};
     use crate::bin::{user_waiting_timer_callback};
     use crate::global::GlobalState;
+
+
 
 
     #[test] fn thread_policy() {
@@ -320,12 +322,20 @@ impl Bin {
         assert!(thread_counts.user_waiting == GlobalState::global().physical_cpus);
 
         //wait for threads to reach their idle state
-        std::thread::sleep(Duration::from_millis(250));
-        //simulate varoius timer fires
-        for _ in 0..50 {
+        std::thread::sleep(Duration::from_millis(500));
+
+        //simulate various timer fires
+        //note that this can run in parallel with other tests, so we need to wait long enough
+        //for all of them to complete, or at least in test mode.
+        let started_waiting = Instant::now();
+        while GlobalState::global().read_thread_counts().user_waiting != 1 {
             user_waiting_timer_callback(std::ptr::null_mut());
+            if started_waiting.elapsed() > std::time::Duration::from_secs(10) {
+                panic!("Never spun down");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        assert_eq!(GlobalState::global().read_thread_counts().user_waiting, 1);
+        let time = started_waiting.elapsed();
+        println!("finished thread_poilcy in {time:?}");
     }
 }
