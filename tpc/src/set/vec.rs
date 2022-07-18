@@ -92,7 +92,7 @@ Builds a [Vec] by executing parallel jobs.
 Returns a future.  When polled, jobs will start.  The future will produce the built Vec.  The future can be polled on any async runtime.
 The underlying jobs will execute on tpc.
 */
-pub async fn set_sync<F,O: Debug>(priority: priority::Priority, len: usize, strategy: Strategy, f: F) -> Vec<O> where F:Fn(usize) -> O + Sync {
+pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: Strategy, f: F) -> Vec<O> where F:Fn(usize) -> O + Sync {
     let mut output = Vec::<O>::with_capacity(len);
     let target_tasks = match strategy {
         Strategy::Jobs(jobs) => {jobs}
