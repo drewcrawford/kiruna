@@ -27,7 +27,7 @@ For that reason, we have the sets.  They are designed around the usecase that yo
 jobs that are tens or hundreds of microseconds.  sets always run on the tpc executor, although the Guard future itself
 can be run on any executor.
 */
-mod vec;
+pub mod vec;
 
 use std::future::Future;
 use std::pin::Pin;

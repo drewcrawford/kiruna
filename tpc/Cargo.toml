@@ -25,3 +25,8 @@ thread_stories = ["rand"]
 
 [dev-dependencies]
 kiruna = {path = "../", features=["test"]}
+criterion = "~0"
+
+[[bench]]
+name = "vec"
+harness = false

@@ -92,12 +92,13 @@ mod bin;
 
 mod platform;
 mod global;
-mod set;
+pub mod set;
 
 use std::future::Future;
 use std::pin::Pin;
 use priority::Priority;
 use crate::bin::Bin;
+
 
 pub struct Executor;
 

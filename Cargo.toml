@@ -35,3 +35,6 @@ priority = {path = "priority" }
 seek = {path = "seek", optional=true}
 kiruna_join = {path = "join",optional=true}
 kiruna_tpc = {path = "tpc", optional=true}
+
+[profile.bench]
+lto = true
