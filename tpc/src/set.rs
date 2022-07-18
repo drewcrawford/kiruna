@@ -77,7 +77,7 @@ struct InternalGuard<V> {
     priority: priority::Priority,
 }
 
-impl<'a, V: IntoIterator<Item=Pin<Box<dyn Future<Output=()> + Send + 'a>>> + Unpin> Future for InternalGuard<V> where Self: 'a {
+impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Self: 'a, F: Future<Output=()> + Send + 'a {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -98,12 +98,15 @@ impl<'a, V: IntoIterator<Item=Pin<Box<dyn Future<Output=()> + Send + 'a>>> + Unp
                 let iter = tasks.into_iter();
                 let bin = Executor::global().bin_for(self.priority);
                 let children = iter.map(|f| {
+                    //first, we need to box the future.  It might be boxed already, but in a lot of cases
+                    //we have a consistent wrapping type we can use here, which is not necessarily boxed.
+                    let boxed_child = Box::pin(f);
                     //so the idea here is we're erasing 'a to 'static.
                     //we can do this because,
                     //1. Future is valid for 'a
                     //2. We are valid for 'a
                     //3. We  will do something safe on drop.
-                    let i_think_i_am = f as Pin<Box<dyn Future<Output=()> + Send + 'a>>;
+                    let i_think_i_am = boxed_child as Pin<Box<dyn Future<Output=()> + Send + 'a>>;
                     let i_now_become: Pin<Box<dyn Future<Output=()> + Send + 'static>> = unsafe { std::mem::transmute(i_think_i_am) };
                     let child = Child {
                         shared: shared_state.clone(),
@@ -149,7 +152,7 @@ impl<'a, V: IntoIterator<Item=Pin<Box<dyn Future<Output=()> + Send + 'a>>> + Unp
 pub trait Guard: std::future::Future {
 
 }
-impl<'a, V: Unpin + IntoIterator<Item=Pin<Box<dyn Future<Output=()> + Send + 'a>>>> Guard for InternalGuard<V> where Self: 'a {}
+impl<'a, F,V: Unpin + IntoIterator<Item=F>> Guard for InternalGuard<V> where Self: 'a, F: Future<Output=()> + Send {}
 
 /**
 Build a set from an iterator of tasks.
@@ -157,7 +160,7 @@ Build a set from an iterator of tasks.
 The tasks can access local state.  For this reason, we return a [Guard] of the same lifetime.  If tasks in the set are active
 when leaving scope, the runtime will panic.
 */
-pub fn set_scoped<'a,V: IntoIterator<Item=Pin<Box<dyn Future<Output=()> + 'a + Send>>> + Unpin + 'a>(priority: priority::Priority, tasks: V) -> impl Guard + 'a {
+pub fn set_scoped<'a,F,V: IntoIterator<Item=F> + Unpin + 'a>(priority: priority::Priority, tasks: V) -> impl Guard + 'a where F: Future<Output=()> + Send {
     InternalGuard {
         state: State::NotSpawned(tasks),
         priority
