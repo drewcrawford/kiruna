@@ -55,7 +55,8 @@ impl Future for Child {
                 Poll::Ready(())
             }
             Poll::Pending => {
-                Poll::Pending
+                //we need to shuttle between our context and the main one...
+                todo!()
             }
         }
     }
@@ -190,7 +191,7 @@ impl<V> Drop for InternalGuard<V> {
             //println!("{a}")
         } ) as Pin<Box<dyn Future<Output=()> + Send>>);
 
-        for i in 0..10_000 {
+        for _ in 0..10_000 {
             v.push(Box::pin(async {
                 let _a = &stack_var;
                 //println!("another future {a}");
