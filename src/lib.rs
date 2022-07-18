@@ -127,7 +127,7 @@ Kiruna is "batteries included but off by default".  When you build kiruna you bu
 to do something you need to turn it on.  Table of features:
 
 * `io_stream` implements the [io::stream] personality (only one that's implemented so far)
-* `sync` implements the default single-threaded [Executor].  Note that individual operations generally have some 'other' way to
+* `sync` implements the default single-threaded [sync::Executor].  Note that individual operations generally have some 'other' way to
    do concurrency, so this is the right default for small to medium workloads.
 * `test` is the [world's smallest async 'runtime'](https://github.com/drewcrawford/kiruna/blob/f516f2ad8f493577b0fd2a6f2feef8bde35a8a30/src/test.rs#L23), which polls your futures in a busyloop.
    This is very silly but surprisingly great for use in tests.  It compiles quickly, has no startup time and is badly-behaved generally,
@@ -162,5 +162,8 @@ pub mod futures;
 pub mod join;
 #[cfg(any(test,feature="sync",feature="test"))]
 mod fake_waker;
+
+#[cfg(feature="tpc")]
+pub use kiruna_tpc as tpc;
 
 pub use priority::Priority;

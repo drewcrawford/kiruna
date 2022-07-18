@@ -15,7 +15,7 @@ pub fn test_poll<F: Future>(future: F) -> Poll<F::Output> {
 }
 ///A very silly executor designed for tests.
 ///
-/// Compare this with [sync::block], which is similar, but doesn't panic.
+/// Compare this with [crate::sync::block], which is similar, but doesn't panic.
 /// I am leaving these implementations separate for now as I suspect they might
 /// diverge in the future.
 pub fn test_await<F: Future>(future: F, timeout: Duration) -> F::Output {
