@@ -28,6 +28,7 @@ join = ["kiruna_join"]
 all = ["sync","io_stream","test","futures","join","io_seek"]
 # experimental, currently excluded from all.
 tpc = ["kiruna_tpc"]
+tpc_stories = ["kiruna_tpc/thread_stories"]
 
 [dependencies]
 stream = {path = "stream", optional=true}
