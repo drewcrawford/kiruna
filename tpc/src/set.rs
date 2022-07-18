@@ -46,21 +46,31 @@ struct SharedSet {
 
 struct Child<F> {
     shared: Arc<SharedSet>,
-    inner:F
+    inner:F,
+    done: bool
 }
 impl<F: Future<Output=()>> Future for Child<F> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let tmp_shared = /* unsafely borrow - does not overlap with projection */ unsafe{&*(&self.shared as *const Arc<SharedSet>)};
-        //unsafely project our argument - does not overlap with borrow
-        let child = unsafe{self.map_unchecked_mut(|a| &mut a.inner)};
-        match child.poll(cx) {
+        /*
+        extract a series of separate, non-overlapping fields
+         */
+        let (tmp_shared,mut_done, pin_child) = unsafe {
+            let self_mut = self.get_unchecked_mut();
+            let tmp_shared = &self_mut.shared;
+            let mut_done = &mut self_mut.done;
+            let pin_child = Pin::new_unchecked(&mut self_mut.inner); //has not moved
+            (tmp_shared, mut_done, pin_child)
+        };
+        match pin_child.poll(cx) {
             Poll::Ready(_) => {
                 let r = tmp_shared.children_remaining.fetch_sub(1, Ordering::Relaxed);
                 if r == 1 {
                     tmp_shared.waker.wake();
                 }
+                assert!(!*mut_done, "Polled after done");
+                *mut_done = true;
                 Poll::Ready(())
             }
             Poll::Pending => {
@@ -125,7 +135,8 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
                     let i_now_become: Pin<Box<dyn Future<Output=()> + Send + 'static>> = unsafe { std::mem::transmute(i_think_i_am) };
                     let child = Child {
                         shared: shared_state.clone(),
-                        inner: i_now_become
+                        inner: i_now_become,
+                        done: false,
                     };
                     Box::pin(child)
                 });
