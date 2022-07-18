@@ -315,10 +315,10 @@ impl Bin {
         //wait for threads to reach their idle state
         std::thread::sleep(Duration::from_millis(250));
         //simulate varoius timer fires
-        for _ in 0..10 {
+        for _ in 0..50 {
             user_waiting_timer_callback(std::ptr::null_mut());
         }
-        std::thread::sleep(std::time::Duration::from_millis(150));
+        std::thread::sleep(std::time::Duration::from_millis(1_500));
         assert_eq!(GlobalState::global().read_thread_counts().user_waiting, 1);
     }
 }
