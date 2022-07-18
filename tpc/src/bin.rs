@@ -162,7 +162,8 @@ fn thread_user_waiting_entrypoint_fn() {
         match f {
             ThreadMessage::Idle => {
                 log_time!(format!("worker thread {thread_debug_id:?} sees idle message"));
-                if last_useful.elapsed() > TARGET_IDLE_TIME {
+                let last_check = last_useful.elapsed();
+                if last_check > TARGET_IDLE_TIME {
                     let update_result = GlobalState::global().update_thread_counts(|counts| {
                         if counts.user_waiting > USER_WAITING_MIN_THREADS {
                             counts.user_waiting -= 1;
@@ -172,8 +173,14 @@ fn thread_user_waiting_entrypoint_fn() {
                         log_time!(format!("worker thread {thread_debug_id:?} shutdown"));
                         return;
                     }
+                    else {
+                        log_time!(format!("worker thread {thread_debug_id:?} WONT shutdown as it's the only thread"));
+                    }
                 }
-                log_time!(format!("worker thread {thread_debug_id:?} WONT shutdown"));
+                else {
+                    log_time!(format!("worker thread {thread_debug_id:?} WONT shutdown as it was recently used {last_check:?}"));
+
+                }
             }
             ThreadMessage::Work(mut future) => {
                 log_time!(format!("worker thread {thread_debug_id:?} doing work"));
@@ -218,7 +225,7 @@ impl Bin {
         static USER_WAITING_BIN: OnceCell<Bin> = OnceCell::new();
         
         USER_WAITING_BIN.get_or_init(|| {
-            let (sender, receiver) = crossbeam_channel::bounded(1000);
+            let (sender, receiver) = crossbeam_channel::bounded(1_000_000);
             Bin {
               sender: sender,
                 receiver,
@@ -318,7 +325,7 @@ impl Bin {
         for _ in 0..50 {
             user_waiting_timer_callback(std::ptr::null_mut());
         }
-        std::thread::sleep(std::time::Duration::from_millis(1_500));
+        std::thread::sleep(std::time::Duration::from_secs(1));
         assert_eq!(GlobalState::global().read_thread_counts().user_waiting, 1);
     }
 }

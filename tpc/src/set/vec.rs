@@ -90,7 +90,7 @@ async fn set_sync<F,O: Debug>(priority: priority::Priority, len: usize, f: F) ->
         let test_len = 5_000;
         let big_fut = set_sync(priority::Priority::Testing, test_len, |idx| {
             let mut val = idx;
-            for _ in 0..1_000_000 {
+            for _ in 0..100_000 {
                 val ^= idx;
             }
             val
