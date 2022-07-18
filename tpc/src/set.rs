@@ -40,18 +40,20 @@ struct SharedSet {
     children_done: AtomicSpawned,
 }
 
-struct Child {
+struct Child<F> {
     shared: Arc<SharedSet>,
-    erased_inner:Pin<Box<dyn Future<Output=()> + Send + 'static>>
+    inner:F
 }
-impl Future for Child {
+impl<F: Future<Output=()>> Future for Child<F> {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let child = Pin::new(&mut self.erased_inner);
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let tmp_shared = /* unsafely borrow - does not overlap with projection */ unsafe{&*(&self.shared as *const Arc<SharedSet>)};
+        //unsafely project our argument - does not overlap with borrow
+        let child = unsafe{self.map_unchecked_mut(|a| &mut a.inner)};
         match child.poll(cx) {
             Poll::Ready(_) => {
-                self.shared.children_done.fetch_add(1, Ordering::Relaxed);
+                tmp_shared.children_done.fetch_add(1, Ordering::Relaxed);
                 Poll::Ready(())
             }
             Poll::Pending => {
@@ -105,7 +107,7 @@ impl<'a, V: IntoIterator<Item=Pin<Box<dyn Future<Output=()> + Send + 'a>>> + Unp
                     let i_now_become: Pin<Box<dyn Future<Output=()> + Send + 'static>> = unsafe { std::mem::transmute(i_think_i_am) };
                     let child = Child {
                         shared: shared_state.clone(),
-                        erased_inner: i_now_become
+                        inner: i_now_become
                     };
                     Box::pin(child)
                 });
