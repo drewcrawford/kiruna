@@ -65,7 +65,7 @@ impl<F: Future<Output=()>> Future for Child<F> {
         };
         match pin_child.poll(cx) {
             Poll::Ready(_) => {
-                let r = tmp_shared.children_remaining.fetch_sub(1, Ordering::Relaxed);
+                let r = tmp_shared.children_remaining.fetch_sub(1, Ordering::Release);
                 if r == 1 {
                     tmp_shared.waker.wake();
                 }
@@ -100,7 +100,7 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         fn poll_thunk(set: &Arc<SharedSet>) -> Poll<()> {
-            let load = set.children_remaining.load(Ordering::Relaxed);
+            let load = set.children_remaining.load(Ordering::Acquire);
             if load == 0 {
                 Poll::Ready(())
             }
