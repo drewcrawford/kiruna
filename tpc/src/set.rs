@@ -33,14 +33,15 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::task::{Context, Poll, Waker};
+use std::task::{Context, Poll};
+use atomic_waker::AtomicWaker;
 use crate::{Executor};
 use crate::stories::Story;
 
 type AtomicSpawned = AtomicU32;
 struct SharedSet {
     children_remaining: AtomicSpawned,
-    waker: Waker,
+    waker: AtomicWaker,
 }
 
 struct Child<F> {
@@ -58,7 +59,7 @@ impl<F: Future<Output=()>> Future for Child<F> {
             Poll::Ready(_) => {
                 let r = tmp_shared.children_remaining.fetch_sub(1, Ordering::Relaxed);
                 if r == 1 {
-                    tmp_shared.waker.wake_by_ref();
+                    tmp_shared.waker.wake();
                 }
                 Poll::Ready(())
             }
@@ -108,7 +109,9 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
                 let coming_soon = tasks.len();
                 let bin = Executor::global().bin_for(self.priority);
                 bin.enforce_spare_thread_policy(coming_soon);
-                let shared_state = Arc::new(SharedSet{children_remaining: AtomicSpawned::new(coming_soon.try_into().unwrap()), waker: cx.waker().clone()});
+                let atomic_waker = AtomicWaker::new();
+                atomic_waker.register(cx.waker());
+                let shared_state = Arc::new(SharedSet{children_remaining: AtomicSpawned::new(coming_soon.try_into().unwrap()), waker: atomic_waker});
                 let children = tasks.into_iter().map(|f| {
                     //first, we need to box the future.  It might be boxed already, but in a lot of cases
                     //we have a consistent wrapping type we can use here, which is not necessarily boxed.
@@ -126,10 +129,8 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
                     };
                     Box::pin(child)
                 });
-                let mut spawned = 0;
                 for item in children {
                     bin.spawn_without_hint(item);
-                    spawned += 1;
                 }
                 match poll_thunk(&shared_state) {
                     Poll::Ready(_) => {
@@ -151,8 +152,22 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
                         Poll::Ready(())
                     }
                     Poll::Pending => {
-                        self.state = State::Spawned(state);
-                        Poll::Pending
+                        //register new? waker
+                        state.waker.register(cx.waker());
+                        //once we register waker, we need to check again to avoid race condition
+                        //probably not ready, but let's make extra sure
+                        match poll_thunk(&state) {
+                            Poll::Ready(_) => {
+                                self.story.log("Set done".to_string());
+                                self.state = State::Done;
+                                Poll::Ready(())
+                            }
+                            Poll::Pending => {
+                                //give up
+                                self.state = State::Spawned(state);
+                                Poll::Pending
+                            }
+                        }
                     }
                 }
             }

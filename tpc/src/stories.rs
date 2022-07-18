@@ -14,12 +14,12 @@ impl Story {
             id: rand::rngs::StdRng::from_entropy().sample_iter(&Alphanumeric).take(5).map(char::from).collect()
         }
     }
-    #[inline(always)] pub fn log(&self, string: String) {
+    #[inline(always)] pub fn log(&self, _string: String) {
         #[cfg(feature="thread_stories")] {
             use std::time::Instant;
             let id = &self.id;
             let instant = Instant::now();
-            println!("{instant:?}:{id}: {string}");
+            println!("{instant:?}:{id}: {_string}");
         }
     }
 }
