@@ -20,6 +20,10 @@ dispatchr = {git = "https://github.com/drewcrawford/dispatchr"}
 optional = true
 version = "~0"
 
+[dependencies.windows]
+version = "~0"
+features = ["Win32_System_SystemInformation","Win32_Foundation", "Win32_System_Threading"]
+
 [features]
 # prints some debug information about what threads are up to
 thread_stories = ["rand"]
