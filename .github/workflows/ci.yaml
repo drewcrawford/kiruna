@@ -10,5 +10,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
-      - run: cargo test --features=all --all
+      #- run: cargo test --features=all --all
+      - run: cargo test --features=all --package kiruna --package stream --package kiruna_join --package priority
       - run: cargo doc --features=all
