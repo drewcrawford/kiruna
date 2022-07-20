@@ -18,7 +18,6 @@ use windows::Storage::StorageFile;
 use pcore::string::IntoParameterString;
 use pcore::release_pool::{ReleasePool};
 use std::mem::MaybeUninit;
-use winfuture::AsyncFuture;
 use std::fmt::Formatter;
 use windows::Storage::Streams::{IBuffer, InputStreamOptions};
 use windows::Storage::Streams::Buffer as WinBuffer;
@@ -28,8 +27,8 @@ use windows::Storage::Streams::Buffer as WinBuffer;
 pub enum Error {
     #[error("Windows error {0}")]
     WindowsCore(#[from] WindowsCoreError),
-    #[error("Error during async operation {0}")]
-    Async(#[from] winfuture::Error),
+    // #[error("Error during async operation {0}")]
+    // Async(#[from] winfuture::Error),
 }
 //additional trampoline through WindowsCoreError
 impl From<windows::core::Error> for Error {
@@ -90,11 +89,9 @@ impl Read {
         let mut header = MaybeUninit::uninit();
         let param = forward_slash_path.into_parameter_string(release_pool);
         let path_param = unsafe{param.into_hstring_trampoline(&mut header)};
-        let storage_file = StorageFile::GetFileFromPathAsync(&path_param)?;
-        let future = AsyncFuture::new(storage_file);
-        let storage_file = future.await?;
-        let properties_future = AsyncFuture::new(storage_file.GetBasicPropertiesAsync()?);
-        let input_stream_future = AsyncFuture::new(storage_file.OpenSequentialReadAsync()?);
+        let storage_file = StorageFile::GetFileFromPathAsync(&path_param)?.await?;
+        let properties_future = storage_file.GetBasicPropertiesAsync()?;
+        let input_stream_future = storage_file.OpenSequentialReadAsync()?;
         let (properties,input_stream) = kiruna_join::try_join2(properties_future, input_stream_future).await.map_err(|e| e.merge())?;
 
         let capacity = properties.Size().unwrap();
@@ -102,7 +99,7 @@ impl Read {
         let buffer = WinBuffer::Create(capacity_u32)?;
 
         let read_operation = input_stream.ReadAsync(buffer,capacity_u32,InputStreamOptions::None)?;
-        let read_buffer = AsyncFuture::new(read_operation).await?;
+        let read_buffer = read_operation.await?;
         let public_buffer = Buffer::new(read_buffer);
         Ok(public_buffer)
     }
