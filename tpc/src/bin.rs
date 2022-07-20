@@ -177,8 +177,16 @@ fn thread_user_waiting_entrypoint_fn() {
 
     }
 }
+#[cfg(target_os = "windows")]
+extern "system" fn user_waiting_timer_callback_thunk(_a: *mut c_void, _b: *mut c_void, _c: *mut c_void) {
+    user_waiting_timer_callback()
+}
+#[cfg(target_os = "macos")]
+extern "C" fn user_waiting_timer_callback(a: *const c_void) {
+    user_waiting_timer_callback()
+}
 
-extern "C" fn user_waiting_timer_callback(_arg: *mut c_void) {
+fn user_waiting_timer_callback() {
     //We want to send out as many messages as reasonable.
     //Note that we don't have to get this exactly
     let story = Story::new();
@@ -208,7 +216,7 @@ impl Bin {
               sender: sender,
                 receiver,
                 which_bin: WhichBin::UserWaiting,
-                _idle_timer: Timer::new(user_waiting_timer_callback, Duration::from_secs(10), Duration::from_secs(60))
+                _idle_timer: Timer::new(user_waiting_timer_callback_thunk, Duration::from_secs(10), Duration::from_secs(60))
           }  
         })
     }
@@ -308,7 +316,7 @@ impl Bin {
         //for all of them to complete, or at least in test mode.
         let started_waiting = Instant::now();
         while GlobalState::global().read_thread_counts().user_waiting != 1 {
-            user_waiting_timer_callback(std::ptr::null_mut());
+            user_waiting_timer_callback();
             if started_waiting.elapsed() > std::time::Duration::from_secs(10) {
                 panic!("Never spun down");
             }
