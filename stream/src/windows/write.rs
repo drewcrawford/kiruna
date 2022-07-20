@@ -1,5 +1,5 @@
 use crate::OSError;
-use windows::Win32::Foundation::HANDLE;
+use windows::Win32::Foundation::{HANDLE, WIN32_ERROR};
 use crate::windows::overlapped::{PayloadTrait, Parent};
 use std::pin::Pin;
 use std::mem::MaybeUninit;
@@ -86,7 +86,7 @@ impl<Slice: AsSlice> PayloadTrait for WriteOp<Slice> {
     }
     fn resume_op(self: Pin<&mut Self>, error_code: u32, _bytes_transferred: u32, _handle: HANDLE, _overlapped: Pin<&mut OVERLAPPED>, _h_event: HANDLE, _completion: unsafe extern "system" fn(u32, u32, *mut OVERLAPPED)) -> Poll<Result<Self::Ok, Self::Failure>> {
         if error_code != 0 {
-            Poll::Ready(Err(OSError(error_code)))
+            Poll::Ready(Err(OSError(WIN32_ERROR(error_code))))
         }
         else {
             Poll::Ready(Ok(()))

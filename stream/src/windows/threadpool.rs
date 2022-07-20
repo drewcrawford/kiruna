@@ -10,15 +10,14 @@ pub struct TaskHandle;
 use windows::Win32::Foundation::HANDLE;
 use once_cell::sync::OnceCell;
 use std::sync::mpsc::{Receiver, sync_channel, SyncSender};
+use windows::core::PCSTR;
 
 struct WinSemaphore(HANDLE);
 impl WinSemaphore {
     fn new() -> Self {
         use windows::Win32::System::Threading::CreateSemaphoreA;
-        use windows::Win32::Foundation::PSTR;
-        let handle = unsafe{ CreateSemaphoreA(std::ptr::null_mut(), 0, 2, PSTR(std::ptr::null_mut()))};
-        assert!(handle.0 != 0);
-        Self(handle)
+        let handle = unsafe{ CreateSemaphoreA(std::ptr::null_mut(), 0, 2, PCSTR(std::ptr::null_mut()))};
+        Self(handle.unwrap())
     }
 }
 impl Drop for WinSemaphore {

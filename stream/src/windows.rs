@@ -17,7 +17,7 @@ impl std::fmt::Display for OSError {
             FormatMessageA(
                 FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
                 std::ptr::null(),
-                self.0,
+                self.0.0,
                 //If you pass in zero, FormatMessage looks for a message for LANGIDs in the following order
                 0,
                 //signature wants a PSTR here but doc suggests we can pass in any pointer

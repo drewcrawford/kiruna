@@ -5,7 +5,7 @@ use std::ffi::c_void;
 use windows::Win32::System::IO::{OVERLAPPED,OVERLAPPED_0,OVERLAPPED_0_0};
 use std::pin::Pin;
 use std::task::{Poll};
-use windows::Win32::Foundation::GetLastError;
+use windows::Win32::Foundation::{GetLastError, WIN32_ERROR};
 use windows::Win32::Foundation::HANDLE;
 use std::marker::{PhantomPinned, PhantomData};
 use crate::windows::overlapped::{PayloadTrait, Parent};
@@ -65,7 +65,7 @@ impl PayloadTrait for ReadChild {
     fn resume_op(self: Pin<&mut Self>, error_code: u32, bytes_transferred: u32, handle: HANDLE,overlapped: Pin<&mut OVERLAPPED>, hEvent: HANDLE, completion: unsafe extern "system" fn(u32, u32, *mut OVERLAPPED)) -> Poll<Result<Self::Ok, Self::Failure>> {
         if error_code != 0 {
             //todo: avoid this clone?
-            return Poll::Ready(Err((OSError(error_code), Buffer(self.buffer.0.clone()))));
+            return Poll::Ready(Err((OSError(WIN32_ERROR(error_code)), Buffer(self.buffer.0.clone()))));
         }
         unsafe {
             let s = self.get_unchecked_mut();
