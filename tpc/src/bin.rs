@@ -182,7 +182,7 @@ extern "system" fn user_waiting_timer_callback_thunk(_a: *mut c_void, _b: *mut c
     user_waiting_timer_callback()
 }
 #[cfg(target_os = "macos")]
-extern "C" fn user_waiting_timer_callback(a: *const c_void) {
+extern "C" fn user_waiting_timer_callback_thunk(_a: *mut c_void) {
     user_waiting_timer_callback()
 }
 
