@@ -6,7 +6,7 @@ extern "C" {
     fn sysctlbyname(name: *const c_char, oldp: *mut c_void, oldlenp: *mut c_void, newp: *mut c_void, newlen: usize) -> c_int;
     fn __errno_location() -> *mut c_int;
 }
-pub fn physical_cpus() -> u16 {
+pub fn threadpool_size() -> u16 {
     unsafe {
         let mut r: MaybeUninit<u32> = std::mem::MaybeUninit::uninit();
         let mut r_size = std::mem::size_of::<u32>();
@@ -17,10 +17,9 @@ pub fn physical_cpus() -> u16 {
         }
         r.assume_init() as u16
     }
-
 }
 
 #[test] fn test_physical_cpus() {
-    println!("{} physical cpus",physical_cpus());
+    println!("{} physical cpus", threadpool_size());
 
 }

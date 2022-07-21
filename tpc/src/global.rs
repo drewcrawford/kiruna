@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use once_cell::sync::OnceCell;
-use crate::platform::physical_cpus;
+use crate::platform::threadpool_size;
 
 ///Special statistics type, can be encoded into a u64 for atomic ops.
 ///
@@ -54,7 +54,7 @@ impl GlobalState {
         })
     }
     pub fn new() -> GlobalState {
-        let physical_cpus = physical_cpus();
+        let physical_cpus = threadpool_size();
         GlobalState {
             physical_cpus: physical_cpus,
             thread_counts: AtomicU64::new(ThreadCounts::new().into()),
