@@ -49,8 +49,8 @@ impl WorkerThread {
             use windows::Win32::System::Threading::WaitForSingleObjectEx;
             //enter an alertable wait state
             let reason = unsafe{ WaitForSingleObjectEx(self.semaphore.0, u32::MAX, true)};
-            use windows::Win32::System::Threading::WAIT_OBJECT_0;
-            if reason == WAIT_OBJECT_0 {
+            use windows::Win32::Foundation::WAIT_OBJECT_0;
+            if reason == WAIT_OBJECT_0.0 {
                 //at this point, we have woken because some fn was scheduled
                 //(there are other reasons we might wake, in particular, AIO completion)
                 let r = unsafe{self.receiver.only_one_thread()}.recv().unwrap();

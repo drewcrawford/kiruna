@@ -19,6 +19,7 @@ use pcore::string::IntoParameterString;
 use pcore::release_pool::{ReleasePool};
 use std::mem::MaybeUninit;
 use std::fmt::Formatter;
+use windows::core::InParam;
 use windows::Storage::Streams::{IBuffer, InputStreamOptions};
 use windows::Storage::Streams::Buffer as WinBuffer;
 
@@ -97,8 +98,8 @@ impl Read {
         let capacity = properties.Size().unwrap();
         let capacity_u32 = capacity as u32;
         let buffer = WinBuffer::Create(capacity_u32)?;
-
-        let read_operation = input_stream.ReadAsync(buffer,capacity_u32,InputStreamOptions::None)?;
+        let as_ibuffer: IBuffer = buffer.try_into().unwrap();
+        let read_operation = input_stream.ReadAsync(InParam::borrowed(windows::core::Borrowed::new(Some(&as_ibuffer))),capacity_u32,InputStreamOptions::None)?;
         let read_buffer = read_operation.await?;
         let public_buffer = Buffer::new(read_buffer);
         Ok(public_buffer)
