@@ -1,6 +1,4 @@
-use std::mem::MaybeUninit;
 use std::os::raw::c_void;
-use std::sync::mpsc::channel;
 use std::time::Duration;
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Threading::{CloseThreadpoolTimer, CreateThreadpoolTimer, SetThreadpoolTimer, TP_CALLBACK_ENVIRON_V3, TP_CALLBACK_INSTANCE, TP_CALLBACK_PRIORITY_LOW, TP_TIMER};
@@ -49,7 +47,8 @@ impl Drop for Timer {
 }
 
 #[test] fn make_timer() {
-    let (sender, receiver) = channel();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    use std::mem::MaybeUninit;
     static mut SENDER: MaybeUninit<std::sync::mpsc::Sender<()>> = MaybeUninit::uninit();
     unsafe{SENDER = MaybeUninit::new(sender)};
     extern "system" fn my_timer_fn(_a: *mut c_void, _b: *mut c_void, _c: *mut c_void) {

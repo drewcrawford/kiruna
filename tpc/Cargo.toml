@@ -22,7 +22,7 @@ version = "~0"
 
 [dependencies.windows]
 version = "~0"
-features = ["Win32_System_SystemInformation","Win32_Foundation", "Win32_System_Threading"]
+features = ["Win32_System_SystemInformation","Win32_Foundation", "Win32_System_Threading", "Win32_Security"]
 
 [features]
 # prints some debug information about what threads are up to
