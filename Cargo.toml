@@ -25,7 +25,7 @@ test = []
 futures = []
 # API to join futures
 join = ["kiruna_join"]
-all = ["sync","io_stream","test","futures","join","io_seek"]
+all = ["sync","io_stream","test","futures","join","io_seek","tpc"]
 # experimental, currently excluded from all.
 tpc = ["kiruna_tpc"]
 tpc_stories = ["kiruna_tpc/thread_stories"]
