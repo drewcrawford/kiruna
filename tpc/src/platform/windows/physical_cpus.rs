@@ -4,7 +4,7 @@ use std::mem::MaybeUninit;
 use windows::Win32::System::SystemInformation::{CPU_SET_INFORMATION_TYPE, GetSystemCpuSetInformation, SYSTEM_CPU_SET_INFORMATION};
 use windows::Win32::System::Threading::GetCurrentProcess;
 
-pub fn physical_cpus() -> u16 {
+pub fn threadpool_size() -> u16 {
     /*
   A pseudo handle is a special constant, currently (HANDLE)-1, that is interpreted as the current process handle.
   For compatibility with future operating systems, it is best to call GetCurrentProcess
@@ -29,6 +29,7 @@ pub fn physical_cpus() -> u16 {
 
     let mut byte_offset = 0;
     let mut unique_cores = HashSet::new();
+    let mut logical_cores = 0;
     while byte_offset < _returned_len {
         unsafe {
             let alloc_plus_bytes = alloc.add(byte_offset as usize);
@@ -42,6 +43,7 @@ pub fn physical_cpus() -> u16 {
                  */
                 let core_index = (*element_head).Anonymous.CpuSet.CoreIndex;
                 unique_cores.insert(core_index);
+                logical_cores += 1;
             }
             //When iterating over this structure, use the size field to determine the offset to the next structure.
             byte_offset += (*element_head).Size;
@@ -49,11 +51,15 @@ pub fn physical_cpus() -> u16 {
 
     }
     unsafe{std::alloc::dealloc(alloc, alloc_layout)}
-    unique_cores.len().try_into().unwrap()
+    let cores: u16 = unique_cores.len().try_into().unwrap();
+    //for reasons I don't understand, this performs well on alder lake.
+    //neither the physical nor logical core counts perform as well.
+    (cores + logical_cores) / 2
+
 }
 
 #[test]
-fn test_physical_cpus() {
-  let cpus = physical_cpus();
-    println!("{cpus} physical cpus");
+fn test_threadpool_size() {
+  let cpus = threadpool_size();
+    println!("{cpus} threadpool size");
 }
