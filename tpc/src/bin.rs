@@ -322,7 +322,7 @@ impl Bin {
         let started_waiting = Instant::now();
         while GlobalState::global().read_thread_counts().user_waiting != 1 {
             user_waiting_timer_callback();
-            if started_waiting.elapsed() > std::time::Duration::from_secs(10) {
+            if started_waiting.elapsed() > std::time::Duration::from_secs(20) {
                 panic!("Never spun down");
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
