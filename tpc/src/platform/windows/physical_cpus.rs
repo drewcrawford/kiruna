@@ -1,10 +1,22 @@
 use std::alloc::{Layout};
 use std::collections::HashSet;
+use std::env;
 use std::mem::MaybeUninit;
 use windows::Win32::System::SystemInformation::{CPU_SET_INFORMATION_TYPE, GetSystemCpuSetInformation, SYSTEM_CPU_SET_INFORMATION};
 use windows::Win32::System::Threading::GetCurrentProcess;
 
 pub fn threadpool_size() -> u16 {
+    match env::var("KIRUNA_THREADPOOL_SIZE") {
+        Ok(size) => {
+            use std::str::FromStr;
+            let cpus = u16::from_str(&size).unwrap();
+            println!("Using threadpool size {cpus}");
+            return cpus
+        }
+        Err(_) => {
+
+        }
+    }
     /*
   A pseudo handle is a special constant, currently (HANDLE)-1, that is interpreted as the current process handle.
   For compatibility with future operating systems, it is best to call GetCurrentProcess

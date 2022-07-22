@@ -4,7 +4,7 @@ use kiruna_tpc::set::vec::{set_sync, Strategy};
 fn build_arr(arr_len: usize, jobs: u32) -> Vec<usize> {
     let big_fut = set_sync(priority::Priority::Testing, arr_len,Strategy::Jobs(jobs), |idx| {
         let mut val = idx;
-        for i in 0..10_000 {
+        for i in 0..100_000 {
             val ^= idx ^ i;
         }
         val
