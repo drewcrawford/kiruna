@@ -3,11 +3,11 @@ A set is a collection of tasks that execute in parallel.
 
 The primary way to interact with a set is through a [Guard].
 The [Guard] acts as a future that polls the set as a whole;
-when the Guard becomes [poll::Ready], the entire set has completed.
+when the Guard becomes [Poll::Ready], the entire set has completed.
 
 # Design
 
-The rationale for this design may not be completely obvious.  For example, doesn't [kiruna::join] do something pretty similar?
+The rationale for this design may not be completely obvious.  For example, doesn't `kiruna::join` do something pretty similar?
 
 Yes and no.  `join` does glue together multiple futures, so in that sense it seems similar.  And for jobs that are largely
 IO bound, it is pretty similar.  However, for CPU-bound work, the situation is a bit different.

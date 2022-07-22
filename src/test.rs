@@ -1,6 +1,7 @@
 use std::task::{Poll, Waker, Context, Wake};
 use std::sync::{Arc, Mutex};
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::mpsc::{channel, Sender};
 use std::time::{Duration, Instant};
 use super::fake_waker::FakeWaker;
@@ -13,6 +14,18 @@ pub fn test_poll<F: Future>(future: F) -> Poll<F::Output> {
     let mut as_context = Context::from_waker(&as_waker);
     let mut pinned = Box::pin(future);
     pinned.as_mut().poll(&mut as_context)
+}
+
+/**
+A more cumbersome version of [test_poll] that you can call multiple times on the same Future.
+
+You must pin the future before calling this method. */
+pub fn test_poll_pin<F: Future>(future: &mut Pin<&mut F>) -> Poll<F::Output> {
+    let move_pin = future.as_mut();
+    let fake_waker = Arc::new(FakeWaker);
+    let as_waker: Waker = fake_waker.into();
+    let mut as_context = Context::from_waker(&as_waker);
+    move_pin.poll(&mut as_context)
 }
 ///A very silly executor designed for tests.
 ///

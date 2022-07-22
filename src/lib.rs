@@ -8,14 +8,44 @@ Kiruna is an experimental, tiny, fast, and simple async executor and IO library.
 5.  What if users provided a bit more information that could fix performance issues before they happen?
 6.  ~~What if you are a hipster and too cool to use tokio?~~
 
+For more details on the rationale and design principles, read the manifesto.
+
 Kiruna is also a remote town in the arctic circle.  Programs that use it will be cold, beautiful, and isolated from more popular async runtimes.
 
 # Practicalities
 
 * Kiruna is an experimental/research quality.  But I am depending on it from real projects so I don't intend it to be a toy library.
 * Many features are missing, partly implemented or still being designed.  Some APIs will change.
-* macOS support is decent.  Windows is early but passing most tests.  Linux is planned but not implemented, iOS might happen if I end up needing it
+* macOS and Windows are my primary focus.  Linux is planned but not implemented, iOS might happen if I end up needing it
 * Free for noncommerial or 'small commercial' use, commercial licensing is available.
+
+# Cargo features
+
+Kiruna is "batteries included but off by default".  When you build kiruna you build basically nothing,
+to do something you need to turn it on.  Table of features:
+
+* `io_stream` implements the [io::stream] personality.
+* `io_seek` implements the [io::seek] personality.
+* [sync] implements the default single-threaded [sync::Executor].  Note that individual operations generally have some 'other' way to
+   do concurrency, so this is the right default for small to medium workloads.
+* [crate::test] is the [world's smallest async 'runtime'](https://github.com/drewcrawford/kiruna/blob/f516f2ad8f493577b0fd2a6f2feef8bde35a8a30/src/test.rs#L23), which polls your futures in a busyloop.
+   This is very silly but surprisingly great for use in tests.  It compiles quickly, has no startup time and is badly-behaved generally,
+   which flushes out unusual bugs in a unit test.
+* [join] implements some join functions like in the [futures](https://crates.io/crates/futures) crate.  But they compile faster
+   and support other behaviors like 'fail fast' that are interesting to applications
+* [futures] is a grab bag of convenient APIs for futures.
+* [tpc]: An experimental multicore thread-per-core executor.  Suitable for CPU-bound work or non-blocking IO.
+* [block_party]: Creates futures out of blocking calls.  An experimental multicore threadpool for IO-bound work.
+
+
+
+Coming someday:
+* Additional priorities
+
+Out of scope:
+* Lesser-used IO, like multiprocess communication.
+  * See [command-rs](https://github.com/drewcrawford/command-rs) for a process implementation
+* High-level IO, like TLS or HTTP
 
 # Kiruna manifesto
 
@@ -121,31 +151,7 @@ However, because Kiruna is built around many little functions that "just read a 
 API to read files on macOS.  In fact, one function can call `kqueue` and another might call `dispatch`, which is great for experimentation,
 profiling, debugging, and incrementally adopting OS innovation.
 
-## Cargo features
 
-Kiruna is "batteries included but off by default".  When you build kiruna you build basically nothing,
-to do something you need to turn it on.  Table of features:
-
-* `io_stream` implements the [io::stream] personality (only one that's implemented so far)
-* `sync` implements the default single-threaded [sync::Executor].  Note that individual operations generally have some 'other' way to
-   do concurrency, so this is the right default for small to medium workloads.
-* `test` is the [world's smallest async 'runtime'](https://github.com/drewcrawford/kiruna/blob/f516f2ad8f493577b0fd2a6f2feef8bde35a8a30/src/test.rs#L23), which polls your futures in a busyloop.
-   This is very silly but surprisingly great for use in tests.  It compiles quickly, has no startup time and is badly-behaved generally,
-   which flushes out unusual bugs in a unit test.
-* `join` implements some join functions like in the [futures](https://crates.io/crates/futures) crate.  But they compile faster
-   and support other behaviors like 'fail fast' that are interesting to applications
-* `futures` is a grab bag of convenient APIs for futures.
-* `all` is all the stuff we can do on your platform
-
-Coming someday:
-* Additional runtimes, such as multithreaded
-* Additional personalities, like files or sockets
-* Additional priorities
-
-Out of scope:
-* Lesser-used IO, like multiprocess communication.
-  * See [command-rs](https://github.com/drewcrawford/command-rs) for a process implementation
-* High-level IO, like TLS or HTTP
 */
 
 #[cfg(feature="sync")]
@@ -165,5 +171,8 @@ mod fake_waker;
 
 #[cfg(feature="tpc")]
 pub use kiruna_tpc as tpc;
+
+#[cfg(feature="block_party")]
+pub use kiruna_block_party as block_party;
 
 pub use priority::Priority;

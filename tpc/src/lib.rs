@@ -7,7 +7,7 @@ This is very early, do not expect it to work
 
 # Overview
 
-This is (will be) kiruna's recommended parallel executor.  What the [kiruna::sync] executor is to single-core workloads,
+This is (will be) kiruna's recommended parallel executor.  What the `sync` executor is to single-core workloads,
 this executor is to multicore workloads.
 
 tpc is an appropriate choice for both sync and async tasks.  It is appropriate for high-performance and energy-efficient workoads.
@@ -53,11 +53,11 @@ That said, a bit of IO is not going to kill you on most modern systems.  Just tr
 
 # Task model
 
-Each task sent to the executor is assigned a [kiruna::Priority].  This is used in two ways:
+Each task sent to the executor is assigned a [Priority].  This is used in two ways:
 
 * tpc itself strictly prefers higher-priority tasks to lower-priority tasks.  For example, given a choice between two tasks, tpc begins
   the task of higher priority.
-* tpc's worker threads have an OS priority which is derived from the task's [kiruna::Priority].  This allows the OS to schedule
+* tpc's worker threads have an OS priority which is derived from the task's [Priority].  This allows the OS to schedule
   at the thread level as desired.  Typically, the OS will send low-priority threads to more efficient cores even if more performant
   cores are available.  The OS may also interleave threads with different priorities as it determines is appropriate.
 
