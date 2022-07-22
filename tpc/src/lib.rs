@@ -154,5 +154,5 @@ impl Executor {
    Executor::global().spawn(priority::Priority::Testing, [async move {
         sender.send(()).unwrap();
     }]);
-    receiver.recv_timeout(std::time::Duration::from_secs(1)).unwrap();
+    receiver.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
 }
