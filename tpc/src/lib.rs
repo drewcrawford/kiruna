@@ -149,7 +149,7 @@ impl Executor {
 }
 
 #[test] fn test_spawn() {
-    let (sender,receiver) = std::sync::mpsc::sync_channel(0);
+    let (sender,receiver) = std::sync::mpsc::sync_channel(10);
 
    Executor::global().spawn(priority::Priority::Testing, [async move {
         sender.send(()).unwrap();
