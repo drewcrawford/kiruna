@@ -4,7 +4,8 @@ members = [
     "stream",
     "priority",
     "join",
-    "tpc"
+    "tpc",
+    "spawn",
 ]
 
 [package]

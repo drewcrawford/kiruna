@@ -1,6 +1,8 @@
 use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_int, c_long, c_uint, c_void};
-use crate::bin::WhichBin;
+use priority::Priority;
+use crate::MicroPriority;
+
 #[repr(C)]
 struct pthread_attr_t {
     sig: c_long,
@@ -12,6 +14,10 @@ struct pthread_t {
     sig: c_long,
     cleanup_stack: *mut c_void,
     opaque: [c_char; 8176]
+}
+
+pub enum ThreadPriority {
+
 }
 
 #[repr(C)]
@@ -43,17 +49,24 @@ extern "C" {
 Spawns a thread that executes the closure specified.
 
 This sets the apprpriate priority on the thread prior to launch.
-*/
-pub fn spawn_thread<F: FnOnce() + Send + 'static>(bin: WhichBin, f: F) {
-   let mut attr = MaybeUninit::uninit();
+ */
+pub fn spawn_thread<F: FnOnce() + Send + 'static>(priority: priority::Priority,micro_priority: MicroPriority,  f: F) {
+    let mut attr = MaybeUninit::uninit();
     unsafe {
         let r = pthread_attr_init(attr.assume_init_mut());
         assert!(r==0);
 
-        let qos_class = match bin {
-            WhichBin::UserWaiting =>  QosClassT::USER_INTERACTIVE,
+        let qos_class = match priority {
+            Priority::UserWaiting =>  QosClassT::USER_INTERACTIVE,
+            Priority::Testing => { QosClassT::USER_INTERACTIVE},
+            _ => todo!()
         };
-        let r = pthread_attr_set_qos_class_np(attr.assume_init_mut(), qos_class, RelativePriority::NEW_THREADS);
+        let relative_priority = match micro_priority {
+            MicroPriority::NEW => {
+                RelativePriority::NEW_THREADS
+            }
+        };
+        let r = pthread_attr_set_qos_class_np(attr.assume_init_mut(), qos_class, relative_priority);
         assert!(r==0);
 
         extern "C" fn begin<F: FnOnce() + Send + 'static>(arg: *const c_void) {

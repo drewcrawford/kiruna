@@ -34,6 +34,7 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use std::time::{Duration, Instant};
 use once_cell::sync::OnceCell;
 use crate::platform::*;
+use spawn::{MicroPriority, spawn_thread};
 
 /*
 A brief discussion of this dependency.
@@ -55,6 +56,7 @@ A brief examination also suggests they use locks, which I am somewhat skeptical
 about for the workload.  I would be willing to believe benchmarks if I could replicate them, but I cannot.
  */
 use crossbeam_channel::{Receiver, Sender};
+use priority::Priority;
 
 use crate::global::{GlobalState, ThreadCounts};
 use crate::HeapFuture;
@@ -267,7 +269,10 @@ impl Bin {
                 let launch_amount = proposed_threads - old_threadcount.user_waiting;
                 story.log(format!("launching {launch_amount} new threads"));
                 for _ in 0..launch_amount {
-                    spawn_thread(self.which_bin, thread_user_waiting_entrypoint_fn )
+                    let priority = match self.which_bin {
+                        WhichBin::UserWaiting => {Priority::UserWaiting}
+                    };
+                    spawn_thread(priority,  MicroPriority::NEW, thread_user_waiting_entrypoint_fn)
                 }
             }
             Err(_) => {
