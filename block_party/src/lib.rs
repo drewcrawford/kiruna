@@ -13,7 +13,7 @@ you will need to implement the following small functionalities:
 2.  To create an extra task, not related to your problem, but for block_party's use.  This task is called the [Sidechannel].  It does not need to be the same type as [Task], but if not, you must be able to wait on both types.
 3.  Block on an array of tasks ([Task::wait_any], including the [Sidechannel], waking when any one of the tasks wake.  Return the output of the task.
 4.  Implement a method for block_party to [Sidechannel::wake] the [Sidechannel].
-5.  A [Pool] in which to scope tasks.  You will only be asked to wait on tasks from a single pool.  Usually you want this to be a global static, but if there are some restrictions on which [Tasks] can be waited together, such as
+5.  A [Pool] in which to scope tasks.  You will only be asked to wait on tasks from a single pool.  Usually you want this to be a global static, but if there are some restrictions on which [Task]s can be waited together, such as
 they belong to a shared resource, you can scope them here.
 
 With those steps, block_party will assemble the rest of the problem for you.
@@ -73,40 +73,38 @@ pub trait Task: Sized + 'static + Unpin + Send {
     use std::task::Poll;
     use std::time::Duration;
     use crossbeam_channel::{Receiver, Sender};
-    use once_cell::sync::OnceCell;
     use priority::Priority;
     use crate::WakeResult;
     use crate::Pool;
     /* Test equipment */
-    static TEST_CHANNEL: OnceCell<(Sender<u8>, Receiver<u8>)> = OnceCell::new();
-    fn test_channel() -> &'static (Sender<u8>,Receiver<u8>) {
-        TEST_CHANNEL.get_or_init(|| {
-            crossbeam_channel::bounded(10)
-        })
+    fn test_channel() -> (Sender<u8>,Receiver<u8>) {
+        crossbeam_channel::bounded(10)
     }
     #[derive(Debug)]
     struct MyTask {
         id: u8,
     }
-    struct Sidechannel;
+    struct Sidechannel{
+        sender: Sender<u8>
+    }
     impl super::Sidechannel for Sidechannel {
         fn wake(&self) {
-            test_channel().0.send(u8::MAX).unwrap();
+           self.sender.send(u8::MAX).unwrap();
         }
     }
     impl super::Task for MyTask {
-        type Pool = ();
+        type Pool = (Sender<u8>,Receiver<u8>);
         type Output = u8;
         type Sidechannel = Sidechannel;
 
-        fn make_side_channel(_pool: &()) -> Self::Sidechannel {
-            Sidechannel
+        fn make_side_channel(pool: &(Sender<u8>,Receiver<u8>)) -> Self::Sidechannel {
+            Sidechannel{ sender: pool.0.clone() }
         }
 
-        fn wait_any(_pool: &(), tasks: &[Self], _side_channel: &Self::Sidechannel) -> WakeResult<Self::Output> {
+        fn wait_any(pool: &(Sender<u8>,Receiver<u8>), tasks: &[Self], _side_channel: &Self::Sidechannel) -> WakeResult<Self::Output> {
             assert!(!tasks.iter().any(|t| t.id == u8::MAX));
             println!("waiting on tasks {:?}",tasks);
-            let a_channel = &test_channel().1;
+            let a_channel = &pool.1;
             let result = a_channel.recv().unwrap();
             println!("awoke with result {result}");
             if result == u8::MAX {
@@ -119,21 +117,26 @@ pub trait Task: Sized + 'static + Unpin + Send {
         }
     }
     #[test] fn test_future() {
-        let pool = Pool::new();
+        let test_channel = test_channel();
+        let keep_sender = test_channel.0.clone();
+        let pool = Pool::new_with(test_channel);
         let task = MyTask {
             id: 0,
         };
         let future = crate::future::Future::new(&pool,task, Priority::Testing);
-        std::thread::spawn(|| {
+        std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(100));
-            test_channel().0.send(0).unwrap();
+            keep_sender.send(0).unwrap();
         });
         let r = kiruna::test::test_await(future, std::time::Duration::from_secs(1));
         assert!(r == 23);
+
     }
 
     #[test] fn test_two_futures() {
-        let pool = Pool::new();
+        let test_channel = test_channel();
+        let keep_sender = test_channel.0.clone();
+        let pool = Pool::new_with(test_channel);
         let task = MyTask {
             id: 1
         };
@@ -151,7 +154,7 @@ pub trait Task: Sized + 'static + Unpin + Send {
         assert_eq!(r2, Poll::Pending);
 
         std::thread::sleep(Duration::from_millis(100)); //wait for the poll to actually take effect.
-        test_channel().0.send(2).unwrap();
+        keep_sender.send(2).unwrap();
         std::thread::sleep(Duration::from_millis(100));
         let r = kiruna::test::test_poll_pin(&mut future);
         assert_eq!(r, Poll::Pending);
@@ -161,14 +164,16 @@ pub trait Task: Sized + 'static + Unpin + Send {
     }
 
     #[test] fn sparse() {
-        let pool = Pool::new();
+        let test_channel = test_channel();
+        let keep_sender = test_channel.0.clone();
+        let pool = Pool::new_with(test_channel);
         let task = MyTask {
             id: 3
         };
         let future = crate::future::Future::new(&pool,task, Priority::Testing);
-        std::thread::spawn(|| {
+        std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(100));
-            test_channel().0.send(3).unwrap();
+            keep_sender.send(3).unwrap();
         });
         kiruna::test::sparse_await(future, Duration::from_secs(5));
     }

@@ -17,13 +17,14 @@ pub(crate) struct SendSideInner<Task: crate::Task> {
     sender: Sender<WorkerSideInfo<Task>>,
     inner: Arc<PoolInner<Task>>,
 }
+use crate::Task;
 
 /**
 A scope for [Task]s.
 
 You will only be asked to wait on [Task]s for one pool in a single call.  If there are no restrictions on how tasks can be intermixed for waiting,
 you want to use a global pool for the best performance.  Place the [Pool] into a global static so that it is reused
-across [Future]s.
+across [crate::Future]s.
 
 In some cases, [Task]s are scoped to a particular resource, such as a hardware device, and [Task]s from different devices
 cannot be awaited together in a single call.  If so, you want to create one [Pool] per resource, and use the same pool instance
@@ -81,6 +82,12 @@ will be passed to various methods on the [Task]
                 inner: inner,
             }),
         }
+    }
+    /**
+    Read the custom type from the pool.
+*/
+    pub(crate) fn get(&self) -> &Task::Pool {
+        &self.send_side_inner.inner.pool_user
     }
 }
 
