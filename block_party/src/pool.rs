@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, compiler_fence, Ordering};
 use std::time::Duration;
@@ -5,7 +6,6 @@ use crossbeam_channel::{Receiver, Sender};
 use spawn::{MicroPriority, spawn_thread};
 use crate::{Sidechannel, WakeResult};
 use crate::future::Mailbox;
-
 pub(crate) struct PoolInner<Task: crate::Task> {
     receiver: Receiver<WorkerSideInfo<Task>>,
     thread_launched: AtomicBool,
@@ -13,28 +13,38 @@ pub(crate) struct PoolInner<Task: crate::Task> {
     side_channel: RwLock<Task::Sidechannel>,
     pool_user: Task::Pool,
 }
+impl<Task: crate::Task> Debug for PoolInner<Task> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let receiver = &self.receiver;
+        let thread_launched = &self.thread_launched;
+        f.write_fmt(format_args!("<PoolInner{{receiver: {receiver:?} thread_launched: {thread_launched:?}, ..}}"))
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct SendSideInner<Task: crate::Task> {
     sender: Sender<WorkerSideInfo<Task>>,
     inner: Arc<PoolInner<Task>>,
 }
-use crate::Task;
 
 /**
-A scope for [Task]s.
+A scope for [crate::Task]s.
 
-You will only be asked to wait on [Task]s for one pool in a single call.  If there are no restrictions on how tasks can be intermixed for waiting,
+You will only be asked to wait on [crate::Task]s for one pool in a single call.  If there are no restrictions on how tasks can be intermixed for waiting,
 you want to use a global pool for the best performance.  Place the [Pool] into a global static so that it is reused
 across [crate::Future]s.
 
-In some cases, [Task]s are scoped to a particular resource, such as a hardware device, and [Task]s from different devices
+In some cases, [crate::Task]s are scoped to a particular resource, such as a hardware device, and [crate::Task]s from different devices
 cannot be awaited together in a single call.  If so, you want to create one [Pool] per resource, and use the same pool instance
-across all [Task]s with the same resource.  Tasks will be segregated by [Pool] for waiting, so that you are only asked to wait
+across all [crate::Task]s with the same resource.  Tasks will be segregated by [Pool] for waiting, so that you are only asked to wait
 on one pool's tasks per call.  Maintaining multiple pools has minor performance overheads in some cases but it is necessary
 to correctly implement some blocking APIs.
 */
+#[derive(Debug)]
 pub struct Pool<Task: crate::Task> {
     pub(crate) send_side_inner: Arc<SendSideInner<Task>>,
 }
+
 impl<Task: crate::Task> SendSideInner<Task> {
     pub(crate) fn launch_if_needed_user_waiting(&self, info: WorkerSideInfo<Task>) {
         self.sender.send(info).unwrap();

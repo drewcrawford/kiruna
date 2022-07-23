@@ -84,6 +84,7 @@ pub trait Task: Sized + 'static + Unpin + Send {
     struct MyTask {
         id: u8,
     }
+    #[derive(Debug)]
     struct Sidechannel{
         sender: Sender<u8>
     }
