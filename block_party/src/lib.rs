@@ -10,16 +10,19 @@ This is where block_party comes in, it makes your "just block as a future" probl
 you will need to implement the following small functionalities:
 
 1.  An value of the [Task] to wait on.  This may be a semaphore, fence, IO operation, etc.
-2.  To create an extra task, not related to your problem, but for block_party's use.  This task is called the [Sidechannel].
+2.  To create an extra task, not related to your problem, but for block_party's use.  This task is called the [Sidechannel].  It does not need to be the same type as [Task], but if not, you must be able to wait on both types.
 3.  Block on an array of tasks ([Task::wait_any], including the [Sidechannel], waking when any one of the tasks wake.  Return the output of the task.
 4.  Implement a method for block_party to [Sidechannel::wake] the [Sidechannel].
+5.  A [Pool] in which to scope tasks.  You will only be asked to wait on tasks from a single pool.  Usually you want this to be a global static, but if there are some restrictions on which [Tasks] can be waited together, such as
+they belong to a shared resource, you can scope them here.
 
-With those four steps, block_party will assemble the rest of the problem for you.
+With those steps, block_party will assemble the rest of the problem for you.
 */
 mod pool;
 mod future;
 
 pub use future::Future;
+use crate::pool::Pool;
 
 
 pub enum WakeResult<Output> {
@@ -31,30 +34,35 @@ pub enum WakeResult<Output> {
 /**
 A Task for block_party's internal use.  You must be able to wait on this in addition to your other tasks.
 */
-pub trait Sidechannel: Sync {
+pub trait Sidechannel: Sync + Send {
     /**
     Implementations for this method should cause any active wait_any calls to return [WakeResult::Sidechannel].
     */
     fn wake(&self);
 }
+
 /**
 Implement this type to describe your problem.
 */
-pub trait Task: Sized + 'static + Unpin {
+pub trait Task: Sized + 'static + Unpin + Send {
     /**
     The output we will produce from this Task.  the result of our file IO, etc.  May be unit.
     */
-    type Output;
+    type Output: Send;
     ///A special task for block_party's use.  You must be able to wait on this type in addition to a collection of Tasks.
     type Sidechannel: Sidechannel;
+    /*
+    An arbitrary type that is shared by the entire [Pool].  Can be unit if you don't need it.
+     */
+    type Pool: Send + Sync;
     ///Create a new SideChannel.
-    fn make_side_channel() -> Self::Sidechannel;
+    fn make_side_channel(pool: &Self::Pool) -> Self::Sidechannel;
     /**
     Block until any one of the tasks or side_channel has woken.
 
     Return information about the woken task.
     */
-    fn wait_any(tasks: &[Self], side_channel: &Self::Sidechannel) -> WakeResult<Self::Output>;
+    fn wait_any(pool: &Self::Pool, tasks: &[Self], side_channel: &Self::Sidechannel) -> WakeResult<Self::Output>;
 }
 
 
@@ -68,6 +76,7 @@ pub trait Task: Sized + 'static + Unpin {
     use once_cell::sync::OnceCell;
     use priority::Priority;
     use crate::WakeResult;
+    use crate::Pool;
     /* Test equipment */
     static TEST_CHANNEL: OnceCell<(Sender<u8>, Receiver<u8>)> = OnceCell::new();
     fn test_channel() -> &'static (Sender<u8>,Receiver<u8>) {
@@ -86,14 +95,15 @@ pub trait Task: Sized + 'static + Unpin {
         }
     }
     impl super::Task for MyTask {
+        type Pool = ();
         type Output = u8;
         type Sidechannel = Sidechannel;
 
-        fn make_side_channel() -> Self::Sidechannel {
+        fn make_side_channel(_pool: &()) -> Self::Sidechannel {
             Sidechannel
         }
 
-        fn wait_any(tasks: &[Self], _side_channel: &Self::Sidechannel) -> WakeResult<Self::Output> {
+        fn wait_any(_pool: &(), tasks: &[Self], _side_channel: &Self::Sidechannel) -> WakeResult<Self::Output> {
             assert!(!tasks.iter().any(|t| t.id == u8::MAX));
             //println!("waiting on tasks {:?}",tasks);
             let a_channel = &test_channel().1;
@@ -109,11 +119,11 @@ pub trait Task: Sized + 'static + Unpin {
         }
     }
     #[test] fn test_future() {
-
+        let pool = Pool::new();
         let task = MyTask {
             id: 0,
         };
-        let future = crate::future::Future::new(task, Priority::Testing);
+        let future = crate::future::Future::new(&pool,task, Priority::Testing);
         std::thread::spawn(|| {
             std::thread::sleep(Duration::from_millis(100));
             test_channel().0.send(0).unwrap();
@@ -123,15 +133,16 @@ pub trait Task: Sized + 'static + Unpin {
     }
 
     #[test] fn test_two_futures() {
+        let pool = Pool::new();
         let task = MyTask {
             id: 1
         };
-        let mut future = crate::future::Future::new(task, Priority::Testing);
+        let mut future = crate::future::Future::new(&pool,task, Priority::Testing);
         let mut future = unsafe{Pin::new_unchecked(&mut future)};
         let task2 = MyTask {
             id: 2,
         };
-        let mut future2 = crate::future::Future::new(task2, Priority::Testing);
+        let mut future2 = crate::future::Future::new(&pool,task2, Priority::Testing);
         let mut future2 = unsafe{Pin::new_unchecked(&mut future2)};
 
         let r = kiruna::test::test_poll_pin(&mut future);
@@ -150,10 +161,11 @@ pub trait Task: Sized + 'static + Unpin {
     }
 
     #[test] fn sparse() {
+        let pool = Pool::new();
         let task = MyTask {
             id: 3
         };
-        let future = crate::future::Future::new(task, Priority::Testing);
+        let future = crate::future::Future::new(&pool,task, Priority::Testing);
         std::thread::spawn(|| {
             std::thread::sleep(Duration::from_millis(100));
             test_channel().0.send(3).unwrap();

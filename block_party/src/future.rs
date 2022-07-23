@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 use atomic_waker::AtomicWaker;
 use priority::Priority;
-use crate::pool::{make_pool_if_needed_user_waiting, WorkerSideInfo};
+use crate::pool::{Pool, SendSideInner, WorkerSideInfo};
 
 pub(crate) struct Mailbox<Output> {
     has_output: AtomicBool,
@@ -13,6 +13,8 @@ pub(crate) struct Mailbox<Output> {
     output: MaybeUninit<Output>,
     waker: AtomicWaker,
 }
+/*Hopefully we transferred Output correctly. */
+unsafe impl<Output: Send> Sync for Mailbox<Output> {}
 impl<Output> Mailbox<Output> {
     /**
     # Safety
@@ -33,15 +35,18 @@ pub struct Future<Task: crate::Task> {
     mailbox: Arc<Mailbox<Task::Output>>,
     priority: Priority,
     gone: bool,
+    pool_inner: Arc<SendSideInner<Task>>,
 }
 impl<Task: crate::Task> Future<Task> {
     /**
     Creates a new future from the specified task.
      */
-    pub fn new(task: Task, priority: Priority) -> Self { Self{
+    pub fn new(pool: &Pool<Task>, task: Task, priority: Priority) -> Self { Self{
         priority, task: Some(task),
         gone: false,
-        mailbox: Arc::new(Mailbox{has_output: AtomicBool::new(false), output: MaybeUninit::uninit() , waker: AtomicWaker::new() })
+        mailbox: Arc::new(Mailbox{has_output: AtomicBool::new(false), output: MaybeUninit::uninit() , waker: AtomicWaker::new()}),
+        pool_inner: pool.send_side_inner.clone(),
+
     }}
 }
 
@@ -82,12 +87,12 @@ impl<Task: crate::Task> std::future::Future for Future<Task> {
                 unpin.mailbox.waker.register(cx.waker());
                 let info = WorkerSideInfo{
                     task,
-                    mailbox: unpin.mailbox.clone()
+                    mailbox: unpin.mailbox.clone(),
                 };
                 match priority {
                     Priority::UserWaiting | Priority::Testing => {
+                        unpin.pool_inner.launch_if_needed_user_waiting(info)
 
-                        make_pool_if_needed_user_waiting(info);
                     }
                     _ => todo!()
                 }
