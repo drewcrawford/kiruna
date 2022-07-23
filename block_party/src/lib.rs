@@ -22,7 +22,7 @@ mod pool;
 mod future;
 
 pub use future::Future;
-use crate::pool::Pool;
+pub use crate::pool::Pool;
 
 
 pub enum WakeResult<Output> {
@@ -105,10 +105,10 @@ pub trait Task: Sized + 'static + Unpin + Send {
 
         fn wait_any(_pool: &(), tasks: &[Self], _side_channel: &Self::Sidechannel) -> WakeResult<Self::Output> {
             assert!(!tasks.iter().any(|t| t.id == u8::MAX));
-            //println!("waiting on tasks {:?}",tasks);
+            println!("waiting on tasks {:?}",tasks);
             let a_channel = &test_channel().1;
             let result = a_channel.recv().unwrap();
-            //println!("awoke with result {result}");
+            println!("awoke with result {result}");
             if result == u8::MAX {
                 WakeResult::Sidechannel
             }
