@@ -146,7 +146,9 @@ impl Read {
     //check a variety of path bugs
     use std::str::FromStr;
     let relative = fix_path(&PathBuf::from_str("my_relative_path").unwrap()).into_string().unwrap();
-    assert!(relative.starts_with("C:\\"));
+    let chars: Vec<char> = relative.chars().collect();
+    assert_eq!(chars[1], ':');
+    assert_eq!(chars[2], '\\');
 
     let slash = fix_path(&PathBuf::from_str("C:\\test/this\\path\\").unwrap()).into_string().unwrap();
     assert_eq!(&slash, "C:\\test\\this\\path\\");
