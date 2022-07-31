@@ -1,4 +1,5 @@
 use std::future::{Future};
+use std::mem::MaybeUninit;
 use std::sync::mpsc::{Receiver, channel, Sender};
 use crate::sync::task::{Task, Wake, ChannelFactory};
 use std::task::{Waker, Context};
@@ -38,6 +39,29 @@ impl<'a> Executor<'a> {
         self.num_active += 1;
         self.local_spawner.send(new_handle).unwrap();
     }
+
+    /**
+    Blocks until the specified future is complete.
+    This version can return a value.
+
+    This is probably not a great idea, but presumably you know what you're doing.
+
+    This does not require the output to be Send or Sync, because all the concurrency
+    happens on the same thread.
+    */
+    pub fn block<R>(future: impl Future<Output=R> + 'a) -> R where R: Unpin + 'a {
+        let mut executor = Self::new();
+        let mut output = MaybeUninit::<R>::uninit();
+
+        let output_ptr = output.as_mut_ptr();
+        executor.spawn(async move {
+            let output = future.await;
+            unsafe{output_ptr.write(output)};
+        });
+        executor.drain();
+        //safe because we wrote to the value
+        unsafe{output.assume_init()}
+    }
     ///Drains the executor.  After this call, the executor can no longer be used.
     ///
     /// This function will return when all spawned tasks complete.
@@ -59,5 +83,17 @@ impl<'a> Executor<'a> {
             }
 
         }
+    }
+}
+
+#[cfg(test)] mod tests {
+    use crate::sync::Executor;
+
+    #[test] fn test_block() {
+        let f = async move {
+            3
+        };
+        let result = Executor::block(f);
+        assert_eq!(result,3);
     }
 }
