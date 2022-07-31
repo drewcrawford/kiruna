@@ -27,6 +27,25 @@ pub fn test_poll_pin<F: Future>(future: &mut Pin<&mut F>) -> Poll<F::Output> {
     let mut as_context = Context::from_waker(&as_waker);
     move_pin.poll(&mut as_context)
 }
+/**
+A more cumbersome version of [test_await] that you can use in conjunction with a [test_poll_pin].
+
+You must pin the future before calling this method.
+*/
+pub fn test_await_pin<F: Future>(future: &mut Pin<&mut F>, timeout: Duration) -> F::Output {
+    let fake_waker = Arc::new(FakeWaker);
+    let as_waker: Waker = fake_waker.into();
+    let mut as_context = Context::from_waker(&as_waker);
+    let instant = Instant::now();
+    let mut pinned = Box::pin(future);
+    while instant.elapsed() < timeout {
+        let result = pinned.as_mut().poll(&mut as_context);
+        if let Poll::Ready(output) = result {
+            return output;
+        }
+    }
+    panic!("Future never arrived!");
+}
 ///A very silly executor designed for tests.
 ///
 /// Compare this with [crate::sync::block], which is similar, but doesn't panic.

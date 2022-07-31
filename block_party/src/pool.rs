@@ -100,41 +100,38 @@ impl<Task: crate::Task> Pool<Task> {
     }
 }
 
-
+/**
+Performs one call to wait_one.  Updates tasks and sidechannel as needed. */
+fn wait_any_one<Task: super::Task>(tasks: &mut Vec<Task>, mailboxes: &mut Vec<Arc<Mailbox<Task::Output>>>, pool_inner: &PoolInner<Task>) {
+    let result = Task::wait_any(&pool_inner.pool_user,tasks.as_slice(), &pool_inner.side_channel.read().unwrap());
+    match result {
+        WakeResult::Task(idx, output) => {
+            tasks.remove(idx);
+            let mailbox = mailboxes.remove(idx);
+            unsafe {
+                mailbox.send_mail(output);
+            }
+        }
+        WakeResult::Sidechannel => {
+            //refresh the side_channel
+            let new_channel = Task::make_side_channel(&pool_inner.pool_user);
+            *pool_inner.side_channel.write().unwrap() = new_channel; //write new channel
+        }
+    }
+}
+fn read_greedy<Task: super::Task>(tasks: &mut Vec<Task>, mailboxes: &mut Vec<Arc<Mailbox<Task::Output>>>, receiver: &Receiver<WorkerSideInfo<Task>>) {
+    while let Ok(info) = receiver.recv_timeout(Duration::ZERO) {
+        tasks.push(info.task);
+        mailboxes.push(info.mailbox);
+    }
+}
 fn worker_fn_user_waiting<Task: super::Task>(pool_inner: Arc<PoolInner<Task>>) {
     let mut tasks = Vec::new();
     let mut mailboxes = Vec::new();
-    //nonblocking task call.  If we block, the thread will shutdown.
-    while let Ok(info) = pool_inner.receiver.recv_timeout(Duration::new(0,0)) {
-        tasks.push(info.task);
-        mailboxes.push(info.mailbox);
-        let side_channel = Some(pool_inner.side_channel.read().unwrap());
-        'more_tasks: loop {
-            let result = Task::wait_any(&pool_inner.pool_user,tasks.as_slice(), side_channel.as_ref().unwrap());
-            match result {
-                WakeResult::Task(idx, output) => {
-                    tasks.remove(idx);
-                    let mailbox = mailboxes.remove(idx);
-                    unsafe {
-                        mailbox.send_mail(output);
-                    }
-                    if tasks.is_empty() {
-                        break 'more_tasks;
-                    }
-                    else {
-                        continue 'more_tasks;
-                    }
-                }
-                WakeResult::Sidechannel => {
-                    //refresh the side_channel
-                    let new_channel = Task::make_side_channel(&pool_inner.pool_user);
-                    std::mem::drop(side_channel); //drop the read lock
-                    *pool_inner.side_channel.write().unwrap() = new_channel; //write new channel
-                    break 'more_tasks;
-                }
-            }
-        }
-
+    read_greedy(&mut tasks, &mut mailboxes, &pool_inner.receiver);
+    while !tasks.is_empty() {
+        wait_any_one(&mut tasks, &mut mailboxes, &pool_inner);
+        read_greedy(&mut tasks, &mut mailboxes, &pool_inner.receiver);
     }
     //inform everyone we're shutting down
     pool_inner.thread_launched.store(false, Ordering::Relaxed);

@@ -178,4 +178,37 @@ pub trait Task: Sized + 'static + Unpin + Send {
         });
         kiruna::test::sparse_await(future, Duration::from_secs(5));
     }
+
+    #[test] fn arrive_late() {
+        let test_channel = test_channel();
+        let keep_sender = test_channel.0.clone();
+        let pool = Pool::new_with(test_channel);
+        for i in 0..5 {
+            println!("arrive_late iteration {i}");
+            let task = MyTask {
+                id: 3
+            };
+
+            //poll first future
+            let mut future = crate::future::Future::new(&pool,task, Priority::Testing);
+            let mut future = unsafe{Pin::new_unchecked(&mut future)};
+            assert_eq!(kiruna::test::test_poll_pin(&mut future), Poll::Pending);
+
+            //poll second future
+            let task2 = MyTask {
+                id: 4
+            };
+            let mut future2 = crate::future::Future::new(&pool, task2, Priority::Testing);
+            let mut future2 = unsafe{Pin::new_unchecked(&mut future2)};
+            assert_eq!(kiruna::test::test_poll_pin(&mut future2),Poll::Pending);
+
+            //complete 2nd future
+            keep_sender.send(4).unwrap();
+            kiruna::test::test_await_pin(&mut future2, Duration::from_secs(5));
+            //complete 1st future
+            keep_sender.send(3).unwrap();
+            kiruna::test::test_await_pin(&mut future, Duration::from_secs(5));
+        }
+
+    }
 }
