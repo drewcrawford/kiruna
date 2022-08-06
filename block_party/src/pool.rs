@@ -92,12 +92,6 @@ impl<Task: crate::Task> Pool<Task> {
             }),
         }
     }
-    /**
-    Read the custom type from the pool.
-*/
-    pub(crate) fn get(&self) -> &Task::Pool {
-        &self.send_side_inner.inner.pool_user
-    }
 }
 
 

@@ -8,10 +8,15 @@ edition = "2021"
 [dependencies]
 thiserror = "~1"
 pcore = {git = "https://github.com/drewcrawford/pcore"}
+boil = {git = "https://github.com/drewcrawford/boil"}
 
 [target.'cfg(target_os="windows")'.dependencies]
 windows = {version = "~0",features=["Storage","Foundation","Storage_Streams","Storage_FileProperties","Win32_System_WinRT"]}
 kiruna_join = {path = "../join"}
+
+[target.'cfg(target_os="macos")'.dependencies]
+dispatchr = {git = "https://github.com/drewcrawford/dispatchr"}
+blocksr = {git = "https://github.com/drewcrawford/blocksr", features=["continuation"]}
 
 [dev-dependencies]
 kiruna = {path = "../", features=["test"]}

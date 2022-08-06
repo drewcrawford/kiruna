@@ -105,20 +105,4 @@ impl Read {
         Ok(public_buffer)
     }
 }
-#[test] fn test_read() {
-    pcore::release_pool::autoreleasepool(|pool| {
-        use std::path::PathBuf;
-        //for whatever reason, this is a "relative" path, but it includes the current directory??
-        let path = Path::new(file!());
-        let components_iter = path.components();
-        let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
 
-        let r = Read::all(&path, pool);
-        let buffer = kiruna::test::test_await(r, std::time::Duration::from_secs(1)).unwrap();
-        let slice = buffer.as_slice();
-        //uh...
-        let slice2 = "The call is coming from INSIDE the building.".as_bytes();
-        assert!(slice.windows(slice2.len()).any(|w| w==slice2))
-    })
-
-}
