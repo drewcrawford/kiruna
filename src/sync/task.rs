@@ -7,6 +7,7 @@ use std::sync::mpsc::{Sender};
 use super::executor::Handle;
 
 ///Top-level future
+#[derive(Debug)]
 pub(crate) struct Task<'a> {
     future: UnsafeCell<Pin<Box<dyn Future<Output=()> + 'a>>>,
 }
@@ -29,7 +30,7 @@ impl<'a> Task<'a> {
 /// a channel and use it from one thread.
 ///
 /// To use this correctly, you must pass an unused channel into this type.
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub(crate) struct ChannelFactory {
     inner: Sender<Handle>
 }

@@ -18,7 +18,7 @@ impl Read {
     /**
     Asynchronous read; reads the entire contents of a file.
      */
-    pub async fn all(path: &Path, priority: kiruna::Priority, release_pool: &ReleasePool) -> Result<Buffer,Error> {
+    pub async fn all(path: &Path, priority: priority::Priority, release_pool: &ReleasePool) -> Result<Buffer,Error> {
         imp::Read::all(path, priority, release_pool).await.map(|o| Buffer(o)).map_err(|e| Error(e))
     }
 }

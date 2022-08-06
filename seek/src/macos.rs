@@ -6,7 +6,7 @@ use blocksr::continuation::Continuation;
 use dispatchr::data::Contiguous;
 use dispatchr::QoS;
 use pcore::release_pool::ReleasePool;
-use kiruna::Priority;
+use priority::Priority;
 use crate::imp::Error::DispatchError;
 
 pub struct Buffer(Contiguous);
@@ -29,7 +29,7 @@ impl Read {
      */
     pub fn all(path: &Path, priority: Priority, _release_pool: &ReleasePool) -> impl Future<Output=Result<Buffer,Error>> {
         let queue = match priority {
-            kiruna::Priority::UserWaiting | kiruna::Priority::Testing => {
+            priority::Priority::UserWaiting | priority::Priority::Testing => {
                 dispatchr::queue::global(QoS::UserInitiated).unwrap()
             }
             _ => todo!(),

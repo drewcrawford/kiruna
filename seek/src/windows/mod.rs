@@ -12,13 +12,14 @@ This personality is implemented only on Windows.  All APIs should be considered 
 */
 mod ibuffer;
 
-use std::borrow::Cow;
-use std::path::Path;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use windows::Storage::StorageFile;
 use pcore::string::IntoParameterString;
 use pcore::release_pool::{ReleasePool};
 use std::mem::MaybeUninit;
 use std::fmt::Formatter;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use windows::core::InParam;
 use windows::Storage::Streams::{IBuffer, InputStreamOptions};
 use windows::Storage::Streams::Buffer as WinBuffer;
@@ -68,6 +69,35 @@ impl From<windows::core::Error> for WindowsCoreError {
     }
 }
 
+fn fix_path(path: &Path) -> OsString {
+    //todo: this could be substantially optimized to avoid allocations, return a borrowed value, use iterators, etc.
+    /*
+    There are many things we need to do to sanitize a path as appropriate for this function.
+    First, we must use an absolute path.
+     */
+    let path = if path.is_relative() {
+        let mut _absolute_path = std::env::current_dir().unwrap();
+        _absolute_path.push(path);
+        _absolute_path
+    }
+    else {
+        path.to_owned() //todo: we could omit this copy
+    };
+    //second we want to replace all slashes with \.
+    //this is documented in https://docs.microsoft.com/en-us/uwp/api/windows.storage.storagefile.getfilefrompathasync?view=winrt-22621
+    let os_string = path.into_os_string();
+    let wide = os_string.encode_wide().map(|char| if char == '/' as u16 { '\\' as u16 } else { char });
+
+    //in some cases, the path contains the characters \\?\.  This has something to do with changing how windows processes paths, see
+    //https://stackoverflow.com/questions/21194530/what-does-mean-when-prepended-to-a-file-path
+    //In any case, the API doesn't like these paths.
+    let mut collect: Vec<u16> = wide.collect();
+    if collect.starts_with(&[92,92,63,92]) {
+        collect.drain(0..4);
+    }
+    let path: OsString = OsStringExt::from_wide(&collect);
+    path
+}
 pub struct Read;
 impl Read {
     /**
@@ -75,21 +105,11 @@ impl Read {
 
     Asynchronous read; reads the entire contents of a file.
     */
-    pub async fn all(path: &Path, release_pool: &ReleasePool) -> Result<Buffer,Error> {
-        let absolute_path;
-        if path.is_relative() {
-            let mut _absolute_path = std::env::current_dir().unwrap();
-            _absolute_path.push(path);
-            absolute_path = Cow::Owned(_absolute_path);
-        }
-        else {
-            absolute_path = Cow::Borrowed(path);
-        }
+    pub async fn all(path: &Path, _release_pool: &ReleasePool) -> Result<Buffer,Error> {
+        let path = fix_path(path);
 
-        let forward_slash_path = absolute_path.as_os_str().to_str().unwrap().replace('/',"\\");
         let mut header = MaybeUninit::uninit();
-        let param = forward_slash_path.into_parameter_string(release_pool);
-        let path_param = unsafe{param.into_hstring_trampoline(&mut header)};
+        let path_param = unsafe{path.into_hstring_trampoline(&mut header)};
         let storage_file = StorageFile::GetFileFromPathAsync(&path_param)?.await?;
         let properties_future = storage_file.GetBasicPropertiesAsync()?;
         let input_stream_future = storage_file.OpenSequentialReadAsync()?;
@@ -105,4 +125,17 @@ impl Read {
         Ok(public_buffer)
     }
 }
+#[test] fn test_fix_path() {
+    //check a variety of path bugs
+    use std::str::FromStr;
+    let relative = fix_path(&PathBuf::from_str("my_relative_path").unwrap()).into_string().unwrap();
+    let chars: Vec<char> = relative.chars().collect();
+    assert_eq!(chars[1], ':');
+    assert_eq!(chars[2], '\\');
 
+    let slash = fix_path(&PathBuf::from_str("C:\\test/this\\path\\").unwrap()).into_string().unwrap();
+    assert_eq!(&slash, "C:\\test\\this\\path\\");
+
+    let weird_prefix = fix_path(&PathBuf::from_str("\\\\?\\C:\\").unwrap()).into_string().unwrap();
+    assert_eq!(&weird_prefix, "C:\\");
+}
