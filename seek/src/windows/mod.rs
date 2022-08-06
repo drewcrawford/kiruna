@@ -13,7 +13,7 @@ This personality is implemented only on Windows.  All APIs should be considered 
 mod ibuffer;
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 use windows::Storage::StorageFile;
 use pcore::string::IntoParameterString;
 use pcore::release_pool::{ReleasePool};
@@ -105,7 +105,7 @@ impl Read {
 
     Asynchronous read; reads the entire contents of a file.
     */
-    pub async fn all(path: &Path, _release_pool: &ReleasePool) -> Result<Buffer,Error> {
+    pub async fn all(path: &Path, _priority: priority::Priority, _release_pool: &ReleasePool) -> Result<Buffer,Error> {
         let path = fix_path(path);
 
         let mut header = MaybeUninit::uninit();
@@ -127,6 +127,7 @@ impl Read {
 }
 #[test] fn test_fix_path() {
     //check a variety of path bugs
+    use std::path::PathBuf;
     use std::str::FromStr;
     let relative = fix_path(&PathBuf::from_str("my_relative_path").unwrap()).into_string().unwrap();
     let chars: Vec<char> = relative.chars().collect();

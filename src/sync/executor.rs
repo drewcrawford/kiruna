@@ -1,5 +1,4 @@
 use std::future::{Future};
-use std::mem::MaybeUninit;
 use std::sync::mpsc::{Receiver, channel, Sender};
 use crate::sync::task::{Task, Wake, ChannelFactory};
 use std::task::{Waker, Context};
