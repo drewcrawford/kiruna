@@ -19,6 +19,7 @@ use pcore::string::IntoParameterString;
 use pcore::release_pool::{ReleasePool};
 use std::mem::MaybeUninit;
 use std::fmt::Formatter;
+use std::future::Future;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use windows::core::InParam;
 use windows::Storage::Streams::{IBuffer, InputStreamOptions};
@@ -105,24 +106,28 @@ impl Read {
 
     Asynchronous read; reads the entire contents of a file.
     */
-    pub async fn all(path: &Path, _priority: priority::Priority, _release_pool: &ReleasePool) -> Result<Buffer,Error> {
+    pub fn all(path: &Path, _priority: priority::Priority, _release_pool: &ReleasePool) -> impl Future<Output=Result<Buffer,Error>> {
         let path = fix_path(path);
 
         let mut header = MaybeUninit::uninit();
         let path_param = unsafe{path.into_hstring_trampoline(&mut header)};
-        let storage_file = StorageFile::GetFileFromPathAsync(&path_param)?.await?;
-        let properties_future = storage_file.GetBasicPropertiesAsync()?;
-        let input_stream_future = storage_file.OpenSequentialReadAsync()?;
-        let (properties,input_stream) = kiruna_join::try_join2(properties_future, input_stream_future).await.map_err(|e| e.merge())?;
+        let storage_file = StorageFile::GetFileFromPathAsync(&path_param).unwrap();
+        async {
+            let storage_file = storage_file.await?;
+            let properties_future = storage_file.GetBasicPropertiesAsync()?;
+            let input_stream_future = storage_file.OpenSequentialReadAsync()?;
+            let (properties,input_stream) = kiruna_join::try_join2(properties_future, input_stream_future).await.map_err(|e| e.merge())?;
 
-        let capacity = properties.Size().unwrap();
-        let capacity_u32 = capacity as u32;
-        let buffer = WinBuffer::Create(capacity_u32)?;
-        let as_ibuffer: IBuffer = buffer.try_into().unwrap();
-        let read_operation = input_stream.ReadAsync(InParam::borrowed(windows::core::Borrowed::new(Some(&as_ibuffer))),capacity_u32,InputStreamOptions::None)?;
-        let read_buffer = read_operation.await?;
-        let public_buffer = Buffer::new(read_buffer);
-        Ok(public_buffer)
+            let capacity = properties.Size().unwrap();
+            let capacity_u32 = capacity as u32;
+            let buffer = WinBuffer::Create(capacity_u32)?;
+            let as_ibuffer: IBuffer = buffer.try_into().unwrap();
+            let read_operation = input_stream.ReadAsync(InParam::borrowed(windows::core::Borrowed::new(Some(&as_ibuffer))),capacity_u32,InputStreamOptions::None)?;
+            let read_buffer = read_operation.await?;
+            let public_buffer = Buffer::new(read_buffer);
+            Ok(public_buffer)
+        }
+
     }
 }
 #[test] fn test_fix_path() {
