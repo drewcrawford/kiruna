@@ -7,6 +7,7 @@ members = [
     "tpc",
     "spawn",
     "block_party",
+    "futures",
 ]
 
 [package]
