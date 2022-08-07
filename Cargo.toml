@@ -24,7 +24,7 @@ io_seek = ["seek"]
 # enable test_await fn
 test = []
 # Various API to work with futures
-futures = []
+futures = ["kiruna_futures"]
 # API to join futures
 join = ["kiruna_join"]
 all = ["sync","io_stream","test","futures","join","io_seek","tpc","block_party"]
@@ -40,3 +40,4 @@ seek = {path = "seek", optional=true}
 kiruna_join = {path = "join",optional=true}
 kiruna_tpc = {path = "tpc", optional=true}
 kiruna_block_party = {path = "block_party", optional=true}
+kiruna_futures = {path = "futures",optional=true}

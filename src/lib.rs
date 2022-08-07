@@ -163,7 +163,7 @@ pub mod test;
 pub mod io;
 
 #[cfg(feature="futures")]
-pub mod futures;
+pub use kiruna_futures as futures;
 #[cfg(feature="join")]
 pub mod join;
 #[cfg(any(test,feature="sync",feature="test"))]

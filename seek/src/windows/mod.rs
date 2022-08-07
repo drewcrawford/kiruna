@@ -100,6 +100,10 @@ fn fix_path(path: &Path) -> OsString {
     path
 }
 pub struct Read;
+
+struct UnsafeSend<T>(T);
+unsafe impl<T> Send for UnsafeSend<T> {}
+
 impl Read {
     /**
     This windows-only API is unstable.
@@ -113,17 +117,25 @@ impl Read {
         let path_param = unsafe{path.into_hstring_trampoline(&mut header)};
         let storage_file = StorageFile::GetFileFromPathAsync(&path_param).unwrap();
         async {
-            let storage_file = storage_file.await?;
-            let properties_future = storage_file.GetBasicPropertiesAsync()?;
-            let input_stream_future = storage_file.OpenSequentialReadAsync()?;
-            let (properties,input_stream) = kiruna_join::try_join2(properties_future, input_stream_future).await.map_err(|e| e.merge())?;
+            //these crazy scopes are because 'drop' doesn't drop for the purposes of send analysis
+            let fut = {
+                let storage_file = storage_file.await?;
+                let properties_future = kiruna_futures::Map::new(storage_file.GetBasicPropertiesAsync()?,|o: Result<_,_>| o.map(|e| UnsafeSend(e)));
+                let input_stream_future = kiruna_futures::Map::new(storage_file.OpenSequentialReadAsync()?, |o: Result<_,_>| o.map(|e| UnsafeSend(e)));
+                kiruna_join::try_join2(properties_future, input_stream_future)
+            };
 
-            let capacity = properties.Size().unwrap();
+            let (properties,input_stream) = fut.await.map_err(|e| e.merge())?;
+
+            let capacity = properties.0.Size().unwrap();
             let capacity_u32 = capacity as u32;
             let buffer = WinBuffer::Create(capacity_u32)?;
-            let as_ibuffer: IBuffer = buffer.try_into().unwrap();
-            let read_operation = input_stream.ReadAsync(InParam::borrowed(windows::core::Borrowed::new(Some(&as_ibuffer))),capacity_u32,InputStreamOptions::None)?;
-            let read_buffer = read_operation.await?;
+            let fut = {
+                let as_ibuffer: IBuffer = buffer.try_into().unwrap();
+                input_stream.0.ReadAsync(InParam::borrowed(windows::core::Borrowed::new(Some(&as_ibuffer))),capacity_u32,InputStreamOptions::None)?
+            };
+
+            let read_buffer = fut.await?;
             let public_buffer = Buffer::new(read_buffer);
             Ok(public_buffer)
         }

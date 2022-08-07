@@ -18,7 +18,7 @@ impl Read {
     /**
     Asynchronous read; reads the entire contents of a file.
      */
-    pub fn all(path: &Path, priority: priority::Priority, release_pool: &ReleasePool) -> impl Future<Output=Result<Buffer,Error>> {
+    pub fn all(path: &Path, priority: priority::Priority, release_pool: &ReleasePool) -> impl Future<Output=Result<Buffer,Error>> + Send {
         let fut = imp::Read::all(path, priority, release_pool);
         async {
             fut.await.map(|o| Buffer(o)).map_err(|e| Error(e))

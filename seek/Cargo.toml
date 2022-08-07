@@ -10,7 +10,7 @@ thiserror = "~1"
 pcore = {git = "https://github.com/drewcrawford/pcore"}
 boil = {git = "https://github.com/drewcrawford/boil"}
 priority = {path = "../priority"}
-
+kiruna_futures = {path = "../futures"}
 [target.'cfg(target_os="windows")'.dependencies]
 windows = {version = "~0",features=["Storage","Foundation","Storage_Streams","Storage_FileProperties","Win32_System_WinRT"]}
 kiruna_join = {path = "../join"}
