@@ -2,9 +2,6 @@
 Sets that build vecs of values.
 */
 
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use crate::global::GlobalState;
 use crate::stories::Story;
 
@@ -140,10 +137,6 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
     let fut_len = child_planner.len();
     let mut jobs = Vec::with_capacity(fut_len.try_into().unwrap());
     for plan in child_planner {
-        let base_ptr = unsafe{
-            //hopefully our plan is correct
-            raw_ptr.add(plan.base_offset)
-        };
         jobs.push(Info {
             base: plan.base_offset,
             len: plan.len,

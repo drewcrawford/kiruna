@@ -318,16 +318,6 @@ impl Bin {
         })
     }
 
-    //homogeneous futures array
-    pub fn spawn<const LENGTH: usize, F: Future<Output=()> + Send + 'static>(&'static self, future: [F; LENGTH]) {
-        self.enforce_spare_thread_policy(LENGTH);
-        for task in future {
-            let our_future = Arc::new(OurFuture::new(Box::pin(task)));
-            let message = ThreadMessage::Work(our_future);
-            self.sender.send(message).unwrap();
-        }
-    }
-
     pub fn spawn_mixed_simple<const LENGTH: usize>(&'static self, jobs: [SimpleJob; LENGTH]) {
         self.enforce_spare_thread_policy(LENGTH);
         for job in jobs {
@@ -447,11 +437,11 @@ impl Bin {
         let done = s.done.clone();
         let resumed = Arc::new(AtomicBool::new(false));
         let resumed_clone = resumed.clone();
-        bin.spawn([
-            async move {
+        bin.spawn_mixed([
+            Box::pin(async move {
                 s.await;
                 resumed_clone.store(true, Ordering::Relaxed);
-            }
+            })
         ]);
         std::thread::sleep(Duration::from_millis(1000));
         assert!(*done.lock().unwrap());

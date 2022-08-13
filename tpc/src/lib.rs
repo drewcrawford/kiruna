@@ -98,7 +98,7 @@ mod stories;
 use std::future::Future;
 use std::pin::Pin;
 use priority::Priority;
-use crate::bin::Bin;
+use crate::bin::{Bin, SimpleJob};
 
 
 pub struct Executor;
@@ -107,19 +107,6 @@ pub struct Executor;
 
 
 impl Executor {
-    /**
-    Spawns the task at the specified priority.
-    */
-    pub fn spawn<const LENGTH: usize, F: Future<Output=()> + Send + 'static>(&self, priority: priority::Priority, future: [F; LENGTH]) {
-        match priority {
-            Priority::UserWaiting | Priority::Testing => {
-                Bin::user_waiting().spawn(future);
-            }
-            _ => {
-                panic!("Unsupported priority {:?}",priority);
-            }
-        }
-    }
 
     /**
     Spawns the tasks at the specified priority.
@@ -132,6 +119,17 @@ impl Executor {
             _ => {
                 panic!("Unsupported priority {:?}",priority);
             }
+        }
+    }
+
+    pub fn spawn_mixed_simple<const LENGTH: usize>(&'static self, priority: Priority, jobs: [SimpleJob; LENGTH]) {
+        match priority {
+            Priority::UserWaiting | Priority::Testing => {
+                Bin::user_waiting().spawn_mixed_simple(jobs)
+            }
+             _ => {
+                 panic!("Unsupported prority {:?}",priority);
+             }
         }
     }
 
@@ -153,8 +151,8 @@ impl Executor {
 #[test] fn test_spawn() {
     let (sender,receiver) = std::sync::mpsc::sync_channel(10);
 
-   Executor::global().spawn(priority::Priority::Testing, [async move {
+   Executor::global().spawn_mixed(priority::Priority::Testing, [Box::pin(async move {
         sender.send(()).unwrap();
-    }]);
+    })]);
     receiver.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
 }

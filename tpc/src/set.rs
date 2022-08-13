@@ -38,7 +38,6 @@ use std::task::{Context, Poll};
 use atomic_waker::AtomicWaker;
 use priority::Priority;
 use crate::{Executor};
-use crate::bin::SimpleJob;
 use crate::stories::Story;
 
 type AtomicSpawned = AtomicU32;
@@ -326,7 +325,7 @@ impl<'a,F: Fn(u32) + Send + Sync> Future for SimpleGuard<'a,F> {
 
     #[test] fn test_simple() {
         let stack_var = 5;
-        let all_jobs = |arg| {
+        let all_jobs = |_| {
             let _a = &stack_var;
         };
         let guard = set_simple_scoped(priority::Priority::Testing, 10_000, &all_jobs);
