@@ -124,11 +124,10 @@ impl Iterator for ChildPlanner {
         
     }
 }
-struct Info<O,F> {
+struct Info<O> {
     base_ptr: Smuggle<O>,
     base: usize,
     len: usize,
-    generator: F,
     story: Story,
 }
 
@@ -159,19 +158,18 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
             base_ptr: Smuggle(base_ptr),
             base: plan.base_offset,
             len: plan.len,
-            generator: &f,
             story: Story::new()
         });
     }
     let job_creator = |index: u32| {
         let index_usize: usize = index.try_into().unwrap();
-        let item: &Info<_,&F> = &jobs[index_usize];
+        let item: &Info<_> = &jobs[index_usize];
         let smuggled = &item.base_ptr;
         let mut write_ptr = smuggled.0;
         let mut slot = item.base;
         for _ in 0..item.len {
             unsafe {
-                let val = (item.generator)(slot);
+                let val = (f)(slot);
                 *write_ptr = val;
                 write_ptr = write_ptr.add(1);
                 slot += 1;
