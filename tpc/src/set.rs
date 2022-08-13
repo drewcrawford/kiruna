@@ -36,6 +36,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::task::{Context, Poll};
 use atomic_waker::AtomicWaker;
+use priority::Priority;
 use crate::{Executor};
 use crate::bin::SimpleJob;
 use crate::stories::Story;
@@ -222,9 +223,13 @@ impl<V> Drop for InternalGuard<V> {
         }
     }
 }
-pub struct SimpleGuard<'a> {
+pub struct SimpleGuard<'a,F> {
+    priority: Priority,
     shared: Arc<SharedSet>,
     data: PhantomData<&'a ()>,
+    jobs: u32,
+    spawned: bool,
+    job_creator: &'a F,
 }
 /**
 Build a set from an iterator of tasks.
@@ -233,56 +238,63 @@ This variant handles 'simple' tasks, eg. closures.
 The tasks can access local state.  For this reason, we return a [Guard] of the same lifetime.  If tasks in the set are active
 when leaving scope, the runtime will panic.
  */
-pub fn set_simple_scoped<'a, F: Fn(u32) + Send + Sync>(priority: priority::Priority, jobs: u32, job_creator: &'a F) -> SimpleGuard<'a> {
-    let executor = Executor::global().bin_for(priority);
-    executor.enforce_spare_thread_policy(jobs.try_into().unwrap());
+pub fn set_simple_scoped<'a, F: Fn(u32) + Send + Sync>(priority: priority::Priority, jobs: u32, job_creator: &'a F) -> SimpleGuard<'a,F> {
     let shared = Arc::new(SharedSet {
         children_remaining: AtomicSpawned::new(jobs),
         waker: AtomicWaker::new()
     });
-    for job in 0..jobs {
-        let shared = shared.clone();
-        let new_job = Box::new(move || {
-            job_creator(job);
-            shared.children_remaining.fetch_sub(1, Ordering::Relaxed);
-        });
-        //so the idea here is we're erasing 'a to 'static.
-        //we can do this because,
-        //1. Future is valid for 'a
-        //2. We are valid for 'a
-        //3. We  will do something safe on drop.
-        let i_think_i_am = new_job as Box<dyn FnOnce() + Send + 'a>;
-        let i_now_become: Box<dyn FnOnce() + Send + 'static> = unsafe { std::mem::transmute(i_think_i_am) };
-        executor.spawn_simple_without_hint(i_now_become);
-    }
     SimpleGuard {
+        job_creator,
         shared,
+        jobs,
+        priority,
         data: PhantomData,
+        spawned: false,
     }
 }
-impl Drop for SimpleGuard<'_> {
+impl<F> Drop for SimpleGuard<'_,F> {
     fn drop(&mut self) {
         if self.shared.children_remaining.load(Ordering::Relaxed) != 0 {
             panic!()
         }
     }
 }
-impl Future for SimpleGuard<'_> {
+impl<'a,F: Fn(u32) + Send + Sync> Future for SimpleGuard<'a,F> {
     type Output = ();
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        //fast pass
-        if self.shared.children_remaining.load(Ordering::Relaxed) == 0 {
+        let mut_self = self.get_mut();
+        if !mut_self.spawned {
+            let executor = Executor::global().bin_for(mut_self.priority);
+            executor.enforce_spare_thread_policy(mut_self.jobs.try_into().unwrap());
+            for job in 0..mut_self.jobs {
+                let shared = mut_self.shared.clone();
+                let move_job_creator = mut_self.job_creator;
+                let new_job = Box::new(move || {
+                    (move_job_creator)(job);
+                    let item = shared.children_remaining.fetch_sub(1, Ordering::Relaxed);
+                    if item == 1 {
+                        shared.waker.wake();
+                    }
+                });
+                //so the idea here is we're erasing 'a to 'static.
+                //we can do this because,
+                //1. Future is valid for 'a
+                //2. We are valid for 'a
+                //3. We  will do something safe on drop.
+                let i_think_i_am = new_job as Box<dyn FnOnce() + Send + 'a>;
+                let i_now_become: Box<dyn FnOnce() + Send + 'static> = unsafe { std::mem::transmute(i_think_i_am) };
+                executor.spawn_simple_without_hint(i_now_become);
+            }
+            mut_self.spawned = true;
+        }
+
+        //doing this upfront seems a bit better?
+        mut_self.shared.waker.register(cx.waker());
+        if mut_self.shared.children_remaining.load(Ordering::Relaxed) == 0 {
             Poll::Ready(())
         }
         else {
-            self.shared.waker.register(cx.waker());
-            //check again
-            if self.shared.children_remaining.load(Ordering::Acquire) == 0 { //registration should happen-before.
-                Poll::Ready(())
-            }
-            else {
-                Poll::Pending
-            }
+            Poll::Pending
         }
     }
 }

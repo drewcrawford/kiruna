@@ -8,15 +8,6 @@ use std::task::{Context, Poll};
 use crate::global::GlobalState;
 use crate::stories::Story;
 
-struct Smuggle<O>(*mut O);
-impl<O> Clone for Smuggle<O> {
-    fn clone(&self) -> Self {
-        Self(self.0)
-    }
-}
-unsafe impl<O> Send for Smuggle<O> {}
-unsafe impl<O> Sync for Smuggle<O> {}
-
 
 pub enum Strategy {
     /**
@@ -124,8 +115,7 @@ impl Iterator for ChildPlanner {
         
     }
 }
-struct Info<O> {
-    base_ptr: Smuggle<O>,
+struct Info {
     base: usize,
     len: usize,
     story: Story,
@@ -155,17 +145,19 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
             raw_ptr.add(plan.base_offset)
         };
         jobs.push(Info {
-            base_ptr: Smuggle(base_ptr),
             base: plan.base_offset,
             len: plan.len,
             story: Story::new()
         });
     }
+    let base_ptr = raw_ptr as usize;
     let job_creator = |index: u32| {
+        let base_ptr = base_ptr;
         let index_usize: usize = index.try_into().unwrap();
-        let item: &Info<_> = &jobs[index_usize];
-        let smuggled = &item.base_ptr;
-        let mut write_ptr = smuggled.0;
+        let item: &Info = &jobs[index_usize];
+        //smuggle in our base pointer... it's fine
+        let base_ptr = base_ptr as *mut O;
+        let mut write_ptr = unsafe{base_ptr.add(item.base)};
         let mut slot = item.base;
         for _ in 0..item.len {
             unsafe {
