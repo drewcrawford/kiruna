@@ -30,12 +30,14 @@ can be run on any executor.
 pub mod vec;
 
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::task::{Context, Poll};
 use atomic_waker::AtomicWaker;
 use crate::{Executor};
+use crate::bin::SimpleJob;
 use crate::stories::Story;
 
 type AtomicSpawned = AtomicU32;
@@ -220,11 +222,76 @@ impl<V> Drop for InternalGuard<V> {
         }
     }
 }
+pub struct SimpleGuard<'a> {
+    shared: Arc<SharedSet>,
+    data: PhantomData<&'a ()>,
+}
+/**
+Build a set from an iterator of tasks.
+
+This variant handles 'simple' tasks, eg. closures.
+The tasks can access local state.  For this reason, we return a [Guard] of the same lifetime.  If tasks in the set are active
+when leaving scope, the runtime will panic.
+ */
+pub fn set_simple_scoped<'a, J: IntoIterator<Item=Box<dyn FnOnce() + Send + 'a>>>(priority: priority::Priority, jobs: J ) -> SimpleGuard<'a> {
+    let executor = Executor::global().bin_for(priority);
+    let mut jobs_collect: Vec<_> = jobs.into_iter().collect();
+    executor.enforce_spare_thread_policy(jobs_collect.len());
+    let shared = Arc::new(SharedSet {
+        children_remaining: AtomicSpawned::new(jobs_collect.len().try_into().unwrap()),
+        waker: AtomicWaker::new()
+    });
+    for job in jobs_collect.drain(0..jobs_collect.len()) {
+        let shared = shared.clone();
+        let new_job = Box::new(move || {
+            job();
+            shared.children_remaining.fetch_sub(1, Ordering::Relaxed);
+        });
+        //so the idea here is we're erasing 'a to 'static.
+        //we can do this because,
+        //1. Future is valid for 'a
+        //2. We are valid for 'a
+        //3. We  will do something safe on drop.
+        let i_think_i_am = new_job as Box<dyn FnOnce() + Send + 'a>;
+        let i_now_become: Box<dyn FnOnce() + Send + 'static> = unsafe { std::mem::transmute(i_think_i_am) };
+        executor.spawn_simple_without_hint(i_now_become);
+    }
+    SimpleGuard {
+        shared,
+        data: PhantomData,
+    }
+}
+impl Drop for SimpleGuard<'_> {
+    fn drop(&mut self) {
+        if self.shared.children_remaining.load(Ordering::Relaxed) != 0 {
+            panic!()
+        }
+    }
+}
+impl Future for SimpleGuard<'_> {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        //fast pass
+        if self.shared.children_remaining.load(Ordering::Relaxed) == 0 {
+            Poll::Ready(())
+        }
+        else {
+            self.shared.waker.register(cx.waker());
+            //check again
+            if self.shared.children_remaining.load(Ordering::Acquire) == 0 { //registration should happen-before.
+                Poll::Ready(())
+            }
+            else {
+                Poll::Pending
+            }
+        }
+    }
+}
 
 #[cfg(test)] mod tests {
     use std::future::Future;
     use std::pin::Pin;
-    use crate::set::set_scoped;
+    use crate::set::{set_scoped, set_simple_scoped};
     use kiruna::test::{test_await,sparse_await};
 
     #[test] fn test_set() {
@@ -244,6 +311,19 @@ impl<V> Drop for InternalGuard<V> {
 
         let guard = set_scoped(priority::Priority::Testing, v);
         test_await(guard, std::time::Duration::from_secs(2));
+    }
+
+    #[test] fn test_simple() {
+        let mut v = Vec::new();
+        let stack_var = 5;
+        for _ in 0..10_000 {
+            v.push(Box::new(|| {
+                let _a = &stack_var;
+            }) as Box<dyn FnOnce() + Send>);
+        }
+        let guard = set_simple_scoped(priority::Priority::Testing, v);
+        test_await(guard, std::time::Duration::from_secs(2));
+
     }
 
     #[test] fn test_sparse() {

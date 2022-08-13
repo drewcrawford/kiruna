@@ -69,7 +69,11 @@ pub enum WhichBin {
     UserWaiting,
 }
 
+pub type SimpleJob = Box<dyn FnOnce() -> () + Send>;
+
 enum ThreadMessage {
+    ///In cases where we are confident the fn won't resume, we can be substantially faster
+    Simple(SimpleJob),
     Work(Arc<OurFuture>),
     ///This message is occasionally sent to threads to allow them to think about dying
     Idle,
@@ -256,6 +260,11 @@ fn thread_user_waiting_entrypoint_fn() {
                 story.log(format!("worker thread done with work"));
                 last_useful = Instant::now();
             }
+            ThreadMessage::Simple(job) => {
+                story.log(format!("worker thread doing work"));
+                job();
+                story.log(format!("worker thread done with work"));
+            }
 
         }
 
@@ -317,6 +326,14 @@ impl Bin {
         }
     }
 
+    pub fn spawn_mixed_simple<const LENGTH: usize>(&'static self, jobs: [SimpleJob; LENGTH]) {
+        self.enforce_spare_thread_policy(LENGTH);
+        for job in jobs {
+            let message = ThreadMessage::Simple(job);
+            self.sender.send(message).unwrap();
+        }
+    }
+
     //heterogeneous array
     //design note.  We require boxed for 'static support.
     pub fn spawn_mixed<const LENGTH: usize>(&'static self, futures: [Pin<Box<(dyn Future<Output=()> + Send)>>; LENGTH]) {
@@ -331,6 +348,11 @@ impl Bin {
     pub fn spawn_without_hint<F: Future<Output=()> + Send + 'static>(&'static self, future: F) {
         let our_task = Arc::new(OurFuture::new(Box::pin(future)));
         let message = ThreadMessage::Work(our_task);
+        self.sender.send(message).unwrap();
+    }
+
+    pub fn spawn_simple_without_hint(&'static self, future: SimpleJob) {
+        let message = ThreadMessage::Simple(future);
         self.sender.send(message).unwrap();
     }
 
