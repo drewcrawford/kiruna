@@ -103,7 +103,7 @@ use crate::bin::Bin;
 
 pub struct Executor;
 
-type HeapFuture = Pin<Box<dyn Future<Output=()> + Send>>;
+//type HeapFuture = Pin<Box<dyn Future<Output=()> + Send>>;
 
 
 impl Executor {
@@ -121,8 +121,10 @@ impl Executor {
         }
     }
 
-    /** Spawns the tasks at the specified priority. */
-    pub fn spawn_mixed<const LENGTH: usize>(&'static self, priority: Priority, futures: [Pin<Box<dyn Future<Output=()> + Send>>; LENGTH]) {
+    /**
+    Spawns the tasks at the specified priority.
+    .*/
+    pub fn spawn_mixed<const LENGTH: usize>(&'static self, priority: Priority, futures: [Pin<Box<(dyn Future<Output=()> + Send)>>; LENGTH]) {
         match priority {
             Priority::UserWaiting | Priority::Testing => {
                 Bin::user_waiting().spawn_mixed(futures)
