@@ -264,6 +264,8 @@ fn thread_user_waiting_entrypoint_fn() {
                 story.log(format!("worker thread doing work"));
                 job();
                 story.log(format!("worker thread done with work"));
+                last_useful = Instant::now();
+
             }
 
         }
