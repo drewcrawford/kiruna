@@ -233,18 +233,17 @@ This variant handles 'simple' tasks, eg. closures.
 The tasks can access local state.  For this reason, we return a [Guard] of the same lifetime.  If tasks in the set are active
 when leaving scope, the runtime will panic.
  */
-pub fn set_simple_scoped<'a, J: IntoIterator<Item=Box<dyn FnOnce() + Send + 'a>>>(priority: priority::Priority, jobs: J ) -> SimpleGuard<'a> {
+pub fn set_simple_scoped<'a, F: Fn(u32) + Send + Sync>(priority: priority::Priority, jobs: u32, job_creator: &'a F) -> SimpleGuard<'a> {
     let executor = Executor::global().bin_for(priority);
-    let mut jobs_collect: Vec<_> = jobs.into_iter().collect();
-    executor.enforce_spare_thread_policy(jobs_collect.len());
+    executor.enforce_spare_thread_policy(jobs.try_into().unwrap());
     let shared = Arc::new(SharedSet {
-        children_remaining: AtomicSpawned::new(jobs_collect.len().try_into().unwrap()),
+        children_remaining: AtomicSpawned::new(jobs),
         waker: AtomicWaker::new()
     });
-    for job in jobs_collect.drain(0..jobs_collect.len()) {
+    for job in 0..jobs {
         let shared = shared.clone();
         let new_job = Box::new(move || {
-            job();
+            job_creator(job);
             shared.children_remaining.fetch_sub(1, Ordering::Relaxed);
         });
         //so the idea here is we're erasing 'a to 'static.
@@ -314,14 +313,11 @@ impl Future for SimpleGuard<'_> {
     }
 
     #[test] fn test_simple() {
-        let mut v = Vec::new();
         let stack_var = 5;
-        for _ in 0..10_000 {
-            v.push(Box::new(|| {
-                let _a = &stack_var;
-            }) as Box<dyn FnOnce() + Send>);
-        }
-        let guard = set_simple_scoped(priority::Priority::Testing, v);
+        let all_jobs = |arg| {
+            let _a = &stack_var;
+        };
+        let guard = set_simple_scoped(priority::Priority::Testing, 10_000, &all_jobs);
         test_await(guard, std::time::Duration::from_secs(2));
 
     }

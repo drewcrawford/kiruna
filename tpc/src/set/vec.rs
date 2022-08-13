@@ -124,6 +124,13 @@ impl Iterator for ChildPlanner {
         
     }
 }
+struct Info<O,F> {
+    base_ptr: Smuggle<O>,
+    base: usize,
+    len: usize,
+    generator: F,
+    story: Story,
+}
 
 /**
 Builds a [Vec] by executing parallel jobs.
@@ -142,43 +149,41 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
 
     let child_planner = ChildPlanner::new(strategy, len);
     let fut_len = child_planner.len();
-    let jobs = child_planner.map(|plan| {
+    let mut jobs = Vec::with_capacity(fut_len.try_into().unwrap());
+    for plan in child_planner {
         let base_ptr = unsafe{
             //hopefully our plan is correct
             raw_ptr.add(plan.base_offset)
         };
-        /*
-                    base_ptr: Smuggle(base_ptr),
+        jobs.push(Info {
+            base_ptr: Smuggle(base_ptr),
             base: plan.base_offset,
             len: plan.len,
             generator: &f,
             story: Story::new()
-         */
-        let base_ptr = Smuggle(base_ptr);
-        let base = plan.base_offset;
-        let len = plan.len;
-        let generator = &f;
-        let story = Story::new();
-        Box::new(move || {
-            let smuggled = base_ptr;
-            let mut write_ptr = smuggled.0;
-            let mut slot = base;
-            for _ in 0..len {
-                unsafe {
-                    let val = (generator)(slot);
-                    *write_ptr = val;
-                    write_ptr = write_ptr.add(1);
-                    slot += 1;
-                }
+        });
+    }
+    let job_creator = |index: u32| {
+        let index_usize: usize = index.try_into().unwrap();
+        let item: &Info<_,&F> = &jobs[index_usize];
+        let smuggled = &item.base_ptr;
+        let mut write_ptr = smuggled.0;
+        let mut slot = item.base;
+        for _ in 0..item.len {
+            unsafe {
+                let val = (item.generator)(slot);
+                *write_ptr = val;
+                write_ptr = write_ptr.add(1);
+                slot += 1;
             }
-            let base = base;
-            story.log(format!("Built from {base} to {slot}"));
-        }) as Box<dyn FnOnce() + Send>
-    });
+        }
+        let base = item.base;
+        item.story.log(format!("Built from {base} to {slot}"));
+    };
     //println!("launching {fut_len} tasks");
     let story = Story::new();
     story.log(format!("vec set await of length {fut_len}"));
-    super::set_simple_scoped(priority, jobs).await;
+    super::set_simple_scoped(priority, jobs.len().try_into().unwrap(), &job_creator ).await;
     story.log("vec set complete".to_string());
     unsafe{output.set_len(len)};
     output
