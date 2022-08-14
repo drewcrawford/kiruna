@@ -1,7 +1,7 @@
 use std::future::Future;
 use std::fmt::Debug;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 ///Transforms a future with a result, into a future that panics.  This is used to erase the "error" type
 /// for passing to an executor.
@@ -87,6 +87,41 @@ impl<Fut,Operation,Output> Future for Map<Fut,Operation> where Fut: Future, Oper
     }
 }
 
+unsafe fn fake_clone(data: *const ()) -> RawWaker {
+    RawWaker::new(data, &FAKE_VTABLE)
+}
+unsafe fn fake_wake(_data: *const ()) {
+
+}
+unsafe fn fake_wake_by_ref(_data: *const ()) {
+
+}
+fn fake_drop(_data: *const()) {
+
+}
+const FAKE_VTABLE: RawWakerVTable = RawWakerVTable::new(fake_clone, fake_wake, fake_wake_by_ref, fake_drop);
+
+/**
+Polls the future once.
+
+Returns the value if any.  If the future is [Poll::Pending], returns None.
+
+This is primarily of interest in the case you "happen to know" some future will be ready immediately,
+and need a way to call it from a sync context.
+
+It is not terribly useful in the case you want to retry polling the future to get a value a second time.
+*/
+pub fn poll_inline<R,F: Future<Output=R>>(mut future: F) -> Option<R> {
+    let raw_waker = RawWaker::new(std::ptr::null(), &FAKE_VTABLE);
+    let future = unsafe{Pin::new_unchecked(&mut future)};
+    let waker = unsafe{Waker::from_raw(raw_waker)};
+    let mut context = Context::from_waker(&waker);
+    match future.poll(&mut context) {
+        Poll::Ready(r) => Some(r),
+        Poll::Pending => None
+    }
+
+}
 ///A future which is not implemented.
 ///
 /// This macro implements [std::future::Future] for any `Output`, by calling `todo!()`.
