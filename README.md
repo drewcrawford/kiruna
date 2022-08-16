@@ -1,3 +1,5 @@
+![logo](art/logo.png)
+
 Kiruna is an experimental, tiny, fast, and simple async executor and IO library.  Kiruna is an answer to these questions:
 
 1.  ~~What if Rust had *EVEN MOAR* async runtimes than it does already?~~

@@ -67,7 +67,7 @@ impl<Task: crate::Task<Pool=()>> Pool<Task> {
     /**
     Creates a new pool.
 
-    To use this method, [Task::Pool] must be Unit.  If not, use [Self::new_with].
+    To use this method, [crate::Task::Pool] must be Unit.  If not, use [Self::new_with].
 */
     pub fn new() -> Self {
         Self::new_with(())
@@ -75,7 +75,7 @@ impl<Task: crate::Task<Pool=()>> Pool<Task> {
 }
 impl<Task: crate::Task> Pool<Task> {
     /**
-    Creates a new pool with the specified [Task::Pool] value.  This value will be passed to various methods on the [Task]
+    Creates a new pool with the specified [crate::Task::Pool] value.  This value will be passed to various methods on the [crate::Task]
     */
     pub fn new_with(pool: Task::Pool) -> Self {
         let (sender,receiver) = crossbeam_channel::bounded(1);

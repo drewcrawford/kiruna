@@ -2,47 +2,9 @@
 Sets that build vecs of values.
 */
 
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use crate::global::GlobalState;
 use crate::stories::Story;
 
-struct Smuggle<O>(*mut O);
-impl<O> Clone for Smuggle<O> {
-    fn clone(&self) -> Self {
-        Self(self.0)
-    }
-}
-unsafe impl<O> Send for Smuggle<O> {}
-unsafe impl<O> Sync for Smuggle<O> {}
-
-struct VecBuilder<O,F> {
-    base_ptr: Smuggle<O>,
-    base: usize,
-    len: usize,
-    generator: F,
-    story: Story,
-}
-impl<O,F> Future for VecBuilder<O,F> where F: Fn(usize) -> O {
-    type Output = ();
-
-    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut write_ptr = self.base_ptr.0;
-        let mut slot = self.base;
-        for _ in 0..self.len {
-            unsafe {
-                let val = (self.generator)(slot);
-                *write_ptr = val;
-                write_ptr = write_ptr.add(1);
-                slot += 1;
-            }
-        }
-        let base = self.base;
-        self.story.log(format!("Built from {base} to {slot}"));
-        Poll::Ready(())
-    }
-}
 
 pub enum Strategy {
     /**
@@ -150,6 +112,11 @@ impl Iterator for ChildPlanner {
         
     }
 }
+struct Info {
+    base: usize,
+    len: usize,
+    story: Story,
+}
 
 /**
 Builds a [Vec] by executing parallel jobs.
@@ -168,24 +135,38 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
 
     let child_planner = ChildPlanner::new(strategy, len);
     let fut_len = child_planner.len();
-    let futures = child_planner.map(|plan| {
-        let base_ptr = unsafe{
-            //hopefully our plan is correct
-            raw_ptr.add(plan.base_offset)
-        };
-
-        VecBuilder {
-            base_ptr: Smuggle(base_ptr),
+    let mut jobs = Vec::with_capacity(fut_len.try_into().unwrap());
+    for plan in child_planner {
+        jobs.push(Info {
             base: plan.base_offset,
             len: plan.len,
-            generator: &f,
             story: Story::new()
+        });
+    }
+    let base_ptr = raw_ptr as usize;
+    let job_creator = |index: u32| {
+        let base_ptr = base_ptr;
+        let index_usize: usize = index.try_into().unwrap();
+        let item: &Info = &jobs[index_usize];
+        //smuggle in our base pointer... it's fine
+        let base_ptr = base_ptr as *mut O;
+        let mut write_ptr = unsafe{base_ptr.add(item.base)};
+        let mut slot = item.base;
+        for _ in 0..item.len {
+            unsafe {
+                let val = (f)(slot);
+                *write_ptr = val;
+                write_ptr = write_ptr.add(1);
+                slot += 1;
+            }
         }
-    });
+        let base = item.base;
+        item.story.log(format!("Built from {base} to {slot}"));
+    };
     //println!("launching {fut_len} tasks");
     let story = Story::new();
     story.log(format!("vec set await of length {fut_len}"));
-    super::set_scoped(priority, futures).await;
+    super::set_simple_scoped(priority, jobs.len().try_into().unwrap(), &job_creator ).await;
     story.log("vec set complete".to_string());
     unsafe{output.set_len(len)};
     output
