@@ -11,5 +11,7 @@ crossbeam-channel = "~0"
 once_cell = "~1"
 spawn = {path = "../spawn"}
 atomic-waker = "~1"
+
 [dev-dependencies]
-kiruna = {path = "../",features=["test"]}
+kiruna = {path = "../",features=["test","sync"]}
+rand = "~0"
