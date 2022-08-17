@@ -54,7 +54,7 @@ use crate::macos as imp;
         let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
 
         let r = Read::all(&path, kiruna::Priority::Testing,pool);
-        let buffer = kiruna::test::test_await(r, std::time::Duration::from_secs(1)).unwrap();
+        let buffer = kiruna::test::test_await(r, std::time::Duration::from_secs(10)).unwrap();
         let slice = buffer.as_slice();
         //uh...
         let slice2 = "The call is coming from INSIDE the building.".as_bytes();
@@ -72,7 +72,7 @@ use crate::macos as imp;
             let components_iter = path.components();
             let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
             let r = Read::all(&path, kiruna::Priority::Testing,pool);
-            kiruna::test::test_await(r, std::time::Duration::from_secs(1)).unwrap();
+            kiruna::test::test_await(r, std::time::Duration::from_secs(10)).unwrap();
         });
     }
 
