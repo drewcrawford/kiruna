@@ -77,7 +77,6 @@ pub trait Task: Sized + 'static + Unpin + Send {
     use priority::Priority;
     use crate::{Future, WakeResult};
     use crate::Pool;
-    use std::cell::Cell;
     use std::sync::atomic::{AtomicBool, Ordering};
     /* Test equipment */
     fn test_channel() -> (Sender<u8>,Receiver<u8>) {
@@ -233,11 +232,11 @@ pub trait Task: Sized + 'static + Unpin + Send {
             type Sidechannel = DropTask;
             type Pool = ();
 
-            fn make_side_channel(pool: &Self::Pool) -> Self::Sidechannel {
+            fn make_side_channel(_pool: &Self::Pool) -> Self::Sidechannel {
                 DropTask { complete: AtomicBool::new(true) /* no consequences for dropping the sidechannel. */ }
             }
 
-            fn wait_any(pool: &Self::Pool, tasks: &[Self], side_channel: &Self::Sidechannel) -> WakeResult<Self::Output> {
+            fn wait_any(_pool: &Self::Pool, tasks: &[Self], _side_channel: &Self::Sidechannel) -> WakeResult<Self::Output> {
                 // println!("wait {} tasks",tasks.len());
                 std::thread::sleep(Duration::from_millis(1));
                 if rand::thread_rng().gen_bool(0.5) {
@@ -252,7 +251,6 @@ pub trait Task: Sized + 'static + Unpin + Send {
         }
         let mut test_executor = kiruna::sync::Executor::new();
         let pool = Pool::new();
-        use crate::Task;
         for _ in 0..100 {
             test_executor.spawn(Future::new(&pool, DropTask { complete: AtomicBool::new(false)}, Priority::Testing));
             test_executor.do_some();
