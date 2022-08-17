@@ -62,3 +62,19 @@ use crate::macos as imp;
     })
 
 }
+
+#[test] fn stress_test() {
+    for _ in 0..50 {
+        pcore::release_pool::autoreleasepool(|pool| {
+            use std::path::PathBuf;
+            //for whatever reason, this is a "relative" path, but it includes the current directory??
+            let path = Path::new(file!());
+            let components_iter = path.components();
+            let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
+            let r = Read::all(&path, kiruna::Priority::Testing,pool);
+            kiruna::test::test_await(r, std::time::Duration::from_secs(1)).unwrap();
+        });
+    }
+
+
+}

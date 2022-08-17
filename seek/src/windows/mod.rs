@@ -117,15 +117,26 @@ impl Read {
         let path_param = unsafe{path.into_hstring_trampoline(&mut header)};
         let storage_file = StorageFile::GetFileFromPathAsync(&path_param).unwrap();
         async {
-            //these crazy scopes are because 'drop' doesn't drop for the purposes of send analysis
-            let fut = {
-                let storage_file = storage_file.await?;
-                let properties_future = kiruna_futures::Map::new(storage_file.GetBasicPropertiesAsync()?,|o: Result<_,_>| o.map(|e| UnsafeSend(e)));
-                let input_stream_future = kiruna_futures::Map::new(storage_file.OpenSequentialReadAsync()?, |o: Result<_,_>| o.map(|e| UnsafeSend(e)));
-                kiruna_join::try_join2(properties_future, input_stream_future)
-            };
+            let storage_file = UnsafeSend(storage_file.await?);
+            /*
+            You might think these can be run in parallel.
 
-            let (properties,input_stream) = fut.await.map_err(|e| e.merge())?;
+            You'd be wrong.
+
+            https://docs.microsoft.com/en-us/uwp/api/windows.storage.storagefile.getbasicpropertiesasync?view=winrt-22621
+            This method will return E_ILLEGAL_METHOD_CALL if there are other async operations in progress on the same StorageItem instance.
+            Make sure that another thread isn't modifying the StorageItem at the same time.
+             */
+            let properties_fut ={
+                //this ridiculous scope is because drop does not work for the purposes of send analysis.
+                //we must hold all our various inside UnsafeSend outside of limited scopes that do not await anything.
+                storage_file.0.GetBasicPropertiesAsync()?
+            };
+            let properties = UnsafeSend(properties_fut.await?);
+            let input_fut = {
+                storage_file.0.OpenSequentialReadAsync()?
+            };
+            let input_stream = UnsafeSend(input_fut.await?);
 
             let capacity = properties.0.Size().unwrap();
             let capacity_u32 = capacity as u32;
