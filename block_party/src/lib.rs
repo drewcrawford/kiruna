@@ -73,9 +73,11 @@ pub trait Task: Sized + 'static + Unpin + Send {
     use std::task::Poll;
     use std::time::Duration;
     use crossbeam_channel::{Receiver, Sender};
+    use rand::Rng;
     use priority::Priority;
-    use crate::WakeResult;
+    use crate::{Future, WakeResult};
     use crate::Pool;
+    use std::sync::atomic::{AtomicBool, Ordering};
     /* Test equipment */
     fn test_channel() -> (Sender<u8>,Receiver<u8>) {
         crossbeam_channel::bounded(10)
@@ -210,5 +212,49 @@ pub trait Task: Sized + 'static + Unpin + Send {
             kiruna::test::test_await_pin(&mut future, Duration::from_secs(5));
         }
 
+    }
+    #[test] fn drop_check() {
+        struct DropTask {
+            complete: AtomicBool
+        }
+        impl Drop for DropTask {
+            fn drop(&mut self) {
+                assert!(self.complete.load(Ordering::Relaxed));
+            }
+        }
+        impl crate::Sidechannel for DropTask {
+            fn wake(&self) {
+                /* no effect; we will wake the sidechannel randomly */
+            }
+        }
+        impl crate::Task for DropTask {
+            type Output = ();
+            type Sidechannel = DropTask;
+            type Pool = ();
+
+            fn make_side_channel(_pool: &Self::Pool) -> Self::Sidechannel {
+                DropTask { complete: AtomicBool::new(true) /* no consequences for dropping the sidechannel. */ }
+            }
+
+            fn wait_any(_pool: &Self::Pool, tasks: &[Self], _side_channel: &Self::Sidechannel) -> WakeResult<Self::Output> {
+                // println!("wait {} tasks",tasks.len());
+                std::thread::sleep(Duration::from_millis(1));
+                if rand::thread_rng().gen_bool(0.5) {
+                    WakeResult::Sidechannel
+                }
+                else {
+                    let rand = rand::thread_rng().gen_range(0..tasks.len());
+                    tasks[rand].complete.store(true, Ordering::Relaxed);
+                    WakeResult::Task(rand, ())
+                }
+            }
+        }
+        let mut test_executor = kiruna::sync::Executor::new();
+        let pool = Pool::new();
+        for _ in 0..100 {
+            test_executor.spawn(Future::new(&pool, DropTask { complete: AtomicBool::new(false)}, Priority::Testing));
+            test_executor.do_some();
+        }
+        test_executor.drain();
     }
 }

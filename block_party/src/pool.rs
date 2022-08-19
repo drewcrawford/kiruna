@@ -5,7 +5,8 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use spawn::{MicroPriority, spawn_thread};
 use crate::{Sidechannel, WakeResult};
-use crate::future::Mailbox;
+use crate::future::MailboxSender;
+
 pub(crate) struct PoolInner<Task: crate::Task> {
     receiver: Receiver<WorkerSideInfo<Task>>,
     thread_launched: AtomicBool,
@@ -96,15 +97,13 @@ impl<Task: crate::Task> Pool<Task> {
 
 /**
 Performs one call to wait_one.  Updates tasks and sidechannel as needed. */
-fn wait_any_one<Task: super::Task>(tasks: &mut Vec<Task>, mailboxes: &mut Vec<Arc<Mailbox<Task::Output>>>, pool_inner: &PoolInner<Task>) {
+fn wait_any_one<Task: super::Task>(tasks: &mut Vec<Task>, mailboxes: &mut Vec<MailboxSender<Task::Output>>, pool_inner: &PoolInner<Task>) {
     let result = Task::wait_any(&pool_inner.pool_user,tasks.as_slice(), &pool_inner.side_channel.read().unwrap());
     match result {
         WakeResult::Task(idx, output) => {
             tasks.remove(idx);
-            let mailbox = mailboxes.remove(idx);
-            unsafe {
-                mailbox.send_mail(output);
-            }
+            let mut mailbox = mailboxes.remove(idx);
+            mailbox.send_mail(output);
         }
         WakeResult::Sidechannel => {
             //refresh the side_channel
@@ -113,7 +112,7 @@ fn wait_any_one<Task: super::Task>(tasks: &mut Vec<Task>, mailboxes: &mut Vec<Ar
         }
     }
 }
-fn read_greedy<Task: super::Task>(tasks: &mut Vec<Task>, mailboxes: &mut Vec<Arc<Mailbox<Task::Output>>>, receiver: &Receiver<WorkerSideInfo<Task>>) {
+fn read_greedy<Task: super::Task>(tasks: &mut Vec<Task>, mailboxes: &mut Vec<MailboxSender<Task::Output>>, receiver: &Receiver<WorkerSideInfo<Task>>) {
     while let Ok(info) = receiver.recv_timeout(Duration::ZERO) {
         tasks.push(info.task);
         mailboxes.push(info.mailbox);
@@ -133,7 +132,7 @@ fn worker_fn_user_waiting<Task: super::Task>(pool_inner: Arc<PoolInner<Task>>) {
 
 pub(crate) struct WorkerSideInfo<Task: crate::Task> {
     pub(crate) task: Task,
-   pub(crate) mailbox: Arc<Mailbox<Task::Output>>,
+   pub(crate) mailbox: MailboxSender<Task::Output>,
 }
 
 
