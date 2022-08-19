@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_int, c_long, c_uint, c_void};
 use priority::Priority;
@@ -44,13 +45,18 @@ extern "C" {
     fn pthread_attr_destroy(attr: *mut pthread_attr_t) -> c_int;
     fn pthread_create(thread: *mut pthread_t, attr: *const pthread_attr_t, start: extern "C" fn(*const c_void), arg: *const c_void) -> c_int;
     fn pthread_attr_set_qos_class_np(attr: *mut pthread_attr_t, class: QosClassT, relative_priority: RelativePriority) -> c_int;
+    fn pthread_setname_np(name: *const c_char) -> c_int;
+}
+struct LaunchInfo<F> {
+    f: F,
+    thread_name: CString,
 }
 /**
 Spawns a thread that executes the closure specified.
 
-This sets the apprpriate priority on the thread prior to launch.
+This sets the appropriate priority on the thread prior to launch.
  */
-pub fn spawn_thread<F: FnOnce() + Send + 'static>(priority: priority::Priority,micro_priority: MicroPriority,  f: F) {
+pub fn spawn_thread<F: FnOnce() + Send + 'static>(priority: priority::Priority,micro_priority: MicroPriority, debug_name: &str,  f: F) {
     let mut attr = MaybeUninit::uninit();
     unsafe {
         let r = pthread_attr_init(attr.assume_init_mut());
@@ -71,13 +77,19 @@ pub fn spawn_thread<F: FnOnce() + Send + 'static>(priority: priority::Priority,m
 
         extern "C" fn begin<F: FnOnce() + Send + 'static>(arg: *const c_void) {
             unsafe {
-                let unboxed = Box::from_raw(arg as *const F as *mut F);
-                unboxed()
+                let unboxed = Box::from_raw(arg as *const LaunchInfo<F> as *mut LaunchInfo<F>);
+                pthread_setname_np(unboxed.thread_name.as_ptr());
+                (unboxed.f)()
             }
         }
         let mut pthread = MaybeUninit::uninit();
-        let boxed_fn = Box::into_raw(Box::new(f));
-        let r = pthread_create(pthread.assume_init_mut(), attr.assume_init_ref(), begin::<F>, boxed_fn as *const c_void);
+        let thread_info = LaunchInfo {
+            f: f,
+            thread_name: CString::new(debug_name).unwrap()
+        };
+
+        let boxed_info = Box::into_raw(Box::new(thread_info));
+        let r = pthread_create(pthread.assume_init_mut(), attr.assume_init_ref(), begin::<F>, boxed_info as *const c_void);
         assert!(r == 0); //if thread did not start, this probably leaks the box?
 
         let r = pthread_attr_destroy(attr.assume_init_mut());

@@ -9,7 +9,7 @@ extern "system" fn routine<F: FnOnce() + Send + 'static>(param: *mut c_void) -> 
     0
 }
 
-pub fn spawn_thread<F: FnOnce() + Send + 'static>(priority: Priority,_micro_priority: MicroPriority,  f: F) {
+pub fn spawn_thread<F: FnOnce() + Send + 'static>(priority: Priority,_micro_priority: MicroPriority, debug_name: &str, f: F) {
     let stack_size_bytes = 128*1000; //dunno?
     let boxed_fn = Box::new(f);
     let boxed_raw = Box::into_raw(boxed_fn);

@@ -53,7 +53,7 @@ impl<Task: crate::Task> SendSideInner<Task> {
 
             compiler_fence(Ordering::Release); //ensure task was really sent
             let move_pool_inner = self.inner.clone();
-            spawn_thread(priority::Priority::UserWaiting, MicroPriority::NEW,  || {worker_fn_user_waiting::<Task>(move_pool_inner) });
+            spawn_thread(priority::Priority::UserWaiting, MicroPriority::NEW, "kiruna block_party user_waiting", || {worker_fn_user_waiting::<Task>(move_pool_inner) });
         }
         else {
             compiler_fence(Ordering::Release); //ensure task was really sent

@@ -370,11 +370,13 @@ impl Bin {
                 let old_threadcount: ThreadCounts = old_threads.into();
                 let launch_amount = proposed_threads - old_threadcount.user_waiting;
                 story.log(format!("launching {launch_amount} new threads"));
-                for _ in 0..launch_amount {
+                for i in 0..launch_amount {
                     let priority = match self.which_bin {
                         WhichBin::UserWaiting => {Priority::UserWaiting}
                     };
-                    spawn_thread(priority,  MicroPriority::NEW, thread_user_waiting_entrypoint_fn)
+                    let thread_id = i as u64 + old_threads;
+                    let debug_name = format!("kiruna tpc {thread_id}");
+                    spawn_thread(priority,  MicroPriority::NEW, &debug_name, thread_user_waiting_entrypoint_fn)
                 }
             }
             Err(_) => {
