@@ -1,5 +1,6 @@
+use std::ffi::CString;
 use std::os::raw::c_void;
-use windows::Win32::System::Threading::{CreateThread, ResumeThread, SetThreadPriority, THREAD_CREATION_FLAGS, THREAD_PRIORITY_ABOVE_NORMAL};
+use windows::Win32::System::Threading::{CreateThread, ResumeThread, SetThreadDescription, SetThreadPriority, THREAD_CREATION_FLAGS, THREAD_PRIORITY_ABOVE_NORMAL};
 use priority::Priority;
 use crate::MicroPriority;
 
@@ -21,6 +22,8 @@ pub fn spawn_thread<F: FnOnce() + Send + 'static>(priority: Priority,_micro_prio
     };
     //todo: _micro_priority is currently unused on this platform.
     unsafe{SetThreadPriority(handle, priority).unwrap()};
+    let c_name = CString::new(debug_name).unwrap();
+    unsafe{SetThreadDescription(handle, c_name.as_ptr()).unwrap()};
     let r = unsafe{ResumeThread(handle)};
     assert!(r != u32::MAX);
 }
