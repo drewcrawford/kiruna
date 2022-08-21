@@ -122,9 +122,25 @@ fn worker_fn_user_waiting<Task: super::Task>(pool_inner: Arc<PoolInner<Task>>) {
     let mut tasks = Vec::new();
     let mut mailboxes = Vec::new();
     read_greedy(&mut tasks, &mut mailboxes, &pool_inner.receiver);
-    while !tasks.is_empty() {
-        wait_any_one(&mut tasks, &mut mailboxes, &pool_inner);
-        read_greedy(&mut tasks, &mut mailboxes, &pool_inner.receiver);
+    loop {
+        if !tasks.is_empty() {
+            read_greedy(&mut tasks, &mut mailboxes, &pool_inner.receiver);
+            wait_any_one(&mut tasks, &mut mailboxes, &pool_inner);
+        }
+        else {
+            //try a longer poll.  Avoid shutting down if possible
+            //because in some workloads we will immediately relaunch with a new task
+            //even though we don't have one at this exact moment.
+            match pool_inner.receiver.recv_timeout(Duration::from_secs(1)) {
+                Ok(info) => {
+                    tasks.push(info.task);
+                    mailboxes.push(info.mailbox);
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+        }
     }
     //inform everyone we're shutting down
     pool_inner.thread_launched.store(false, Ordering::Relaxed);
