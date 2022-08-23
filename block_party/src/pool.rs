@@ -104,6 +104,11 @@ fn wait_any_one<Task: super::Task>(tasks: &mut Vec<Task>, mailboxes: &mut Vec<Ma
             tasks.remove(idx);
             let mut mailbox = mailboxes.remove(idx);
             mailbox.send_mail(output);
+            if Task::Sidechannel::one_wait_only() {
+                //refresh the sidechannel
+                let new_channel = Task::make_side_channel(&pool_inner.pool_user);
+                *pool_inner.side_channel.write().unwrap() = new_channel; //write new channel
+            }
         }
         WakeResult::Sidechannel => {
             //refresh the side_channel

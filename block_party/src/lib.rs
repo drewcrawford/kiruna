@@ -39,6 +39,12 @@ pub trait Sidechannel: Sync + Send {
     Implementations for this method should cause any active wait_any calls to return [WakeResult::Sidechannel].
     */
     fn wake(&self);
+
+    /**
+    Implement this to indicate that your sidechannel may only be waited one time.
+     If you return `true`, the sidechannel will be recreated after each call to `wake`.
+*/
+    fn one_wait_only() -> bool { false }
 }
 
 /**
