@@ -39,26 +39,8 @@ use once_cell::sync::OnceCell;
 use crate::platform::*;
 use spawn::{MicroPriority, spawn_thread};
 
-/*
-A brief discussion of this dependency.
 
-I looked into writing my own atomic queue.  I even designed one that seems in a cursory examination to be better
-than the widely-used michael-scott scheme (it is easier to analyze at least, which makes it a good fit for kiruna's goals).
-
-It seems that algorithms in the class, including my design, need some actual non-arc GC.  There's a window of time
-where a reference count has reached zero and some other thread is trying to acquire it; to solve this you have to defer
-the deallocation 'awhile', or have some scheme where you tag pointers in the unused bits to fit them in a word,
-and decide not to reference them because they have old tags, etc.
-
-I think writing a garbage collector is a little outside my scope at present, and the best queue based on an existing gc is going to
-be the crossbeam channel.  I think it is not totally optimal on weakly-ordered memory machines but.
-
-I also looked briefly into flume, which is perhaps kiruna's "flavor" of simple dependency.
-They have some impressive benchmarks but I was not immediately able to understand how to replicate their mpmc tests.
-A brief examination also suggests they use locks, which I am somewhat skeptical
-about for the workload.  I would be willing to believe benchmarks if I could replicate them, but I cannot.
- */
-use crossbeam_channel::{Receiver, select, Sender};
+use crate::channel::{Channel};
 use priority::Priority;
 
 use crate::global::{GlobalState, ThreadCounts};
@@ -83,13 +65,8 @@ enum ThreadMessage {
 A bin is an object within which we implement work-stealing.
 */
 pub struct Bin {
-    sender: Sender<ThreadMessage>,
-    receiver: Receiver<ThreadMessage>,
-    //The "preferred" channel is a channel for higher priority work within the bin.
-    //Typically, this is for futures that have been polled once.  We want to repoll them again
-    //quickly as they are likely to be complete.
-    preferred_sender: Sender<ThreadMessage>,
-    preferred_receiver: Receiver<ThreadMessage>,
+    channel: Channel<ThreadMessage>,
+
     which_bin: WhichBin,
     _idle_timer: Timer,
 }
@@ -168,13 +145,13 @@ impl UserWaitingBinWaker {
     fn wake(data: *const ()) {
         let arc_future = unsafe{Arc::from_raw(data as *const OurFuture)};
         let message = ThreadMessage::Work(arc_future);
-        Bin::user_waiting().preferred_sender.send(message).unwrap();
+        Bin::user_waiting().channel.send(message, 0);
     }
     fn wake_by_ref(data: *const ()) {
         unsafe { Arc::increment_strong_count(data as *const OurFuture)}
         let b = unsafe{Arc::from_raw(data as *const OurFuture)};
         let message = ThreadMessage::Work(b);
-        Bin::user_waiting().preferred_sender.send(message).unwrap();
+        Bin::user_waiting().channel.send(message, 0);
     }
     fn drop(data: *const ()) {
         let _drop = unsafe{Arc::from_raw(data as *const OurFuture)};
@@ -203,14 +180,11 @@ fn thread_user_waiting_entrypoint_fn() {
     loop {
         story.log("worker thread recv");
         //first, try receiving on the preferred channel
-        let task = match bin.preferred_receiver.try_recv() {
-            Ok(task) => task,
-            Err(..) => {
+        let task = match bin.channel.recv_immediate(0) {
+            Some(task) => task,
+            None => {
                 //now select on them both
-                select! {
-                    recv(bin.preferred_receiver) -> msg => msg.unwrap(),
-                    recv(bin.receiver) -> msg => msg.unwrap()
-                }
+                bin.channel.recv_all()
             }
         };
         story.log("worker thread recv done");
@@ -295,7 +269,7 @@ fn user_waiting_timer_callback() {
         for _ in 0..thread_counts.user_waiting / 2 {
             //ask up to half the threads to shut down.
             story.log(&format_story!("send idle message"));
-            Bin::user_waiting().sender.try_send(ThreadMessage::Idle).unwrap();
+            Bin::user_waiting().channel.send(ThreadMessage::Idle, 1);
         }
     }
 
@@ -306,12 +280,9 @@ impl Bin {
         static USER_WAITING_BIN: OnceCell<Bin> = OnceCell::new();
         
         USER_WAITING_BIN.get_or_init(|| {
-            let (sender, receiver) = crossbeam_channel::bounded(1_000_000);
-            let (preferred_sender,preferred_receiver) = crossbeam_channel::bounded(1_000_000);
+            let channel = Channel::new(1_000_000,2);
             Bin {
-              sender: sender,
-                receiver,
-                preferred_sender, preferred_receiver,
+              channel,
                 which_bin: WhichBin::UserWaiting,
                 _idle_timer: Timer::new(user_waiting_timer_callback_thunk, Duration::from_secs(10), Duration::from_secs(60))
           }  
@@ -322,7 +293,7 @@ impl Bin {
         self.enforce_spare_thread_policy(LENGTH);
         for job in jobs {
             let message = ThreadMessage::Simple(job);
-            self.sender.try_send(message).unwrap();
+            self.channel.send(message, 1);
         }
     }
 
@@ -333,19 +304,19 @@ impl Bin {
         for task in futures {
             let our_task = Arc::new(OurFuture::new(task));
             let message = ThreadMessage::Work(our_task);
-            self.sender.try_send(message).unwrap();
+            self.channel.send(message, 1);
         }
     }
 
     pub fn spawn_without_hint<F: Future<Output=()> + Send + 'static>(&'static self, future: F) {
         let our_task = Arc::new(OurFuture::new(Box::pin(future)));
         let message = ThreadMessage::Work(our_task);
-        self.sender.try_send(message).unwrap();
+        self.channel.send(message, 1);
     }
 
     pub fn spawn_simple_without_hint(&'static self, future: SimpleJob) {
         let message = ThreadMessage::Simple(future);
-        self.sender.try_send(message).unwrap();
+        self.channel.send(message, 1);
     }
 
     pub fn enforce_spare_thread_policy(&'static self, coming_soon: usize) {
