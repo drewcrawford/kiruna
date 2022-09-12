@@ -1,4 +1,15 @@
 
+macro_rules! format_story {
+    ($($arg:tt)*) => ({
+        #[cfg(feature="thread_stories")] {
+            format!($($arg)*)
+        }
+        #[cfg(not(feature="thread_stories"))] {
+            String::new()
+        }
+    })
+}
+pub(crate) use format_story;
 pub struct Story {
     #[cfg(feature="thread_stories")]
     id: String,

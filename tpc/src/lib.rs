@@ -93,6 +93,8 @@ mod bin;
 mod platform;
 mod global;
 pub mod set;
+
+#[macro_use]
 mod stories;
 
 use std::future::Future;

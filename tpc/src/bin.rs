@@ -62,7 +62,7 @@ use crossbeam_channel::{Receiver, select, Sender};
 use priority::Priority;
 
 use crate::global::{GlobalState, ThreadCounts};
-use crate::stories::Story;
+use crate::stories::{Story};
 
 #[derive(Copy,Clone)]
 pub enum WhichBin {
@@ -199,9 +199,9 @@ fn thread_user_waiting_entrypoint_fn() {
     let mut last_useful = Instant::now();
     let story = Story::new();
 
-    story.log(format!("thread_user_waiting_entrypoint_fn"));
+    story.log("thread_user_waiting_entrypoint_fn".to_string());
     loop {
-        story.log(format!("worker thread recv"));
+        story.log("worker thread recv".to_string());
         //first, try receiving on the preferred channel
         let task = match bin.preferred_receiver.recv_timeout(Duration::ZERO) {
             Ok(task) => task,
@@ -213,11 +213,11 @@ fn thread_user_waiting_entrypoint_fn() {
                 }
             }
         };
-        story.log(format!("worker thread recv done"));
+        story.log("worker thread recv done".to_string());
 
         match task {
             ThreadMessage::Idle => {
-                story.log(format!("worker thread sees idle message"));
+                story.log("worker thread sees idle message".to_string());
                 let last_check = last_useful.elapsed();
                 if last_check > TARGET_IDLE_TIME {
                     let update_result = GlobalState::global().update_thread_counts(|counts| {
@@ -226,15 +226,15 @@ fn thread_user_waiting_entrypoint_fn() {
                         }
                     });
                     if update_result.is_ok() {
-                        story.log(format!("worker thread shutdown"));
+                        story.log("worker thread shutdown".to_string());
                         return;
                     }
                     else {
-                        story.log(format!("worker thread WONT shutdown as it's the only thread"));
+                        story.log("worker thread WONT shutdown as it's the only thread".to_string());
                     }
                 }
                 else {
-                    story.log(format!("worker thread WONT shutdown as it was recently used {last_check:?}"));
+                    story.log(crate::stories::format_story!("worker thread WONT shutdown as it was recently used {last_check:?}"));
 
                 }
             }
@@ -245,7 +245,7 @@ fn thread_user_waiting_entrypoint_fn() {
                     //safety: contract ought to be correctly implemented
                     let full_waker =  Waker::from_raw(waker);
                     let mut context = Context::from_waker(&full_waker);
-                    story.log(format!("worker thread doing work"));
+                    story.log("worker thread doing work".to_string());
                     match unsafe_future.poll(&mut context) {
                         Poll::Ready(_) => {
                             //done!
@@ -257,13 +257,13 @@ fn thread_user_waiting_entrypoint_fn() {
                     std::mem::drop(full_waker); //explicit drop here
                     std::mem::drop(unsafe_future);
                 }
-                story.log(format!("worker thread done with work"));
+                story.log("worker thread done with work".to_string());
                 last_useful = Instant::now();
             }
             ThreadMessage::Simple(job) => {
-                story.log(format!("worker thread doing work"));
+                story.log("worker thread doing work".to_string());
                 job();
-                story.log(format!("worker thread done with work"));
+                story.log("worker thread done with work".to_string());
                 last_useful = Instant::now();
 
             }
