@@ -160,6 +160,7 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
                 slot += 1;
             }
         }
+        #[cfg(feature="thread_stories")]
         let base = item.base;
         item.story.log(&format_story!("Built from {base} to {slot}"));
     };
