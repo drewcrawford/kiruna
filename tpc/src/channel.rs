@@ -1,7 +1,6 @@
 /*!
 A custom channel with lower latency than crossbeam_channel.
  */
-use std::sync::Arc;
 use crate::platform::Semaphore;
 
 struct SharedOne<Element> {
@@ -36,7 +35,7 @@ impl<Element> Channel<Element> {
     pub fn new(bounded: usize, levels: usize) -> Self {
         let mut shared = Vec::with_capacity(levels);
         let global_semaphore = Semaphore::new();
-        for level in 0..levels {
+        for _ in 0..levels {
             let s = SharedOne {
                 queue: crossbeam_queue::ArrayQueue::new(bounded),
                 local_semaphore:Semaphore::new(),
