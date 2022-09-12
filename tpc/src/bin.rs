@@ -203,7 +203,7 @@ fn thread_user_waiting_entrypoint_fn() {
     loop {
         story.log("worker thread recv");
         //first, try receiving on the preferred channel
-        let task = match bin.preferred_receiver.recv_timeout(Duration::ZERO) {
+        let task = match bin.preferred_receiver.try_recv() {
             Ok(task) => task,
             Err(..) => {
                 //now select on them both
@@ -295,7 +295,7 @@ fn user_waiting_timer_callback() {
         for _ in 0..thread_counts.user_waiting / 2 {
             //ask up to half the threads to shut down.
             story.log(&format_story!("send idle message"));
-            Bin::user_waiting().sender.send(ThreadMessage::Idle).unwrap();
+            Bin::user_waiting().sender.try_send(ThreadMessage::Idle).unwrap();
         }
     }
 
@@ -306,8 +306,8 @@ impl Bin {
         static USER_WAITING_BIN: OnceCell<Bin> = OnceCell::new();
         
         USER_WAITING_BIN.get_or_init(|| {
-            let (sender, receiver) = crossbeam_channel::bounded(100);
-            let (preferred_sender,preferred_receiver) = crossbeam_channel::bounded(100);
+            let (sender, receiver) = crossbeam_channel::bounded(1_000_000);
+            let (preferred_sender,preferred_receiver) = crossbeam_channel::bounded(1_000_000);
             Bin {
               sender: sender,
                 receiver,
@@ -322,7 +322,7 @@ impl Bin {
         self.enforce_spare_thread_policy(LENGTH);
         for job in jobs {
             let message = ThreadMessage::Simple(job);
-            self.sender.send(message).unwrap();
+            self.sender.try_send(message).unwrap();
         }
     }
 
@@ -333,19 +333,19 @@ impl Bin {
         for task in futures {
             let our_task = Arc::new(OurFuture::new(task));
             let message = ThreadMessage::Work(our_task);
-            self.sender.send(message).unwrap();
+            self.sender.try_send(message).unwrap();
         }
     }
 
     pub fn spawn_without_hint<F: Future<Output=()> + Send + 'static>(&'static self, future: F) {
         let our_task = Arc::new(OurFuture::new(Box::pin(future)));
         let message = ThreadMessage::Work(our_task);
-        self.sender.send(message).unwrap();
+        self.sender.try_send(message).unwrap();
     }
 
     pub fn spawn_simple_without_hint(&'static self, future: SimpleJob) {
         let message = ThreadMessage::Simple(future);
-        self.sender.send(message).unwrap();
+        self.sender.try_send(message).unwrap();
     }
 
     pub fn enforce_spare_thread_policy(&'static self, coming_soon: usize) {
