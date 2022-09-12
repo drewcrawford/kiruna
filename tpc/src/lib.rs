@@ -96,6 +96,7 @@ pub mod set;
 
 #[macro_use]
 mod stories;
+mod channel;
 
 use std::future::Future;
 use std::pin::Pin;
