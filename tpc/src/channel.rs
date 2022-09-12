@@ -49,7 +49,7 @@ struct SharedOne<Element> {
 impl<Element> SharedOne<Element> {
     fn send(&self, element: Element) {
         let q = self.queue.push(element);
-        assert!(q.is_ok());
+        assert!(q.is_ok()); //we cannot unwrap because element is not necessary Debug
         self.local_semaphore.signal();
     }
     fn recv_nonblock(&self) -> Option<Element> {
@@ -114,7 +114,7 @@ impl<Element> Channel<Element> {
     pub fn recv_all(&self) -> Element {
         self.global_semaphore.wait_forever();
         for s in &self.shared {
-            match s.queue.pop() {
+            match s.recv_nonblock() {
                 Some(e) => return e,
                 None => (),
             }
