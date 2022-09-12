@@ -114,7 +114,7 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
         std::mem::swap(&mut self.state, &mut peek_state);
         match peek_state {
             State::NotSpawned(tasks) => {
-                self.story.log("Set spawning".to_string());
+                self.story.log("Set spawning");
                 //collect the futures up front.  This is because we want to let the child perform the wake to reduce spurious wakes.
                 //but each child needs to know how many children to expect
                 let tasks: Vec<_> = tasks.into_iter().collect();
@@ -148,7 +148,7 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
                 match poll_thunk(&shared_state) {
                     Poll::Ready(_) => {
                         self.state = State::Done;
-                        self.story.log("Set done immediately".to_string());
+                        self.story.log("Set done immediately");
                         Poll::Ready(())
                     }
                     Poll::Pending => {
@@ -160,7 +160,7 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
             State::Spawned(state) => {
                 match poll_thunk(&state) {
                     Poll::Ready(_) => {
-                        self.story.log("Set done".to_string());
+                        self.story.log("Set done");
                         self.state = State::Done;
                         Poll::Ready(())
                     }
@@ -171,7 +171,7 @@ impl<'a, F,V: IntoIterator<Item=F> + Unpin> Future for InternalGuard<V> where Se
                         //probably not ready, but let's make extra sure
                         match poll_thunk(&state) {
                             Poll::Ready(_) => {
-                                self.story.log("Set done".to_string());
+                                self.story.log("Set done");
                                 self.state = State::Done;
                                 Poll::Ready(())
                             }

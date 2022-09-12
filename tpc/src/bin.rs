@@ -62,7 +62,7 @@ use crossbeam_channel::{Receiver, select, Sender};
 use priority::Priority;
 
 use crate::global::{GlobalState, ThreadCounts};
-use crate::stories::{Story};
+use crate::stories::{format_story, Story};
 
 #[derive(Copy,Clone)]
 pub enum WhichBin {
@@ -199,9 +199,9 @@ fn thread_user_waiting_entrypoint_fn() {
     let mut last_useful = Instant::now();
     let story = Story::new();
 
-    story.log("thread_user_waiting_entrypoint_fn".to_string());
+    story.log("thread_user_waiting_entrypoint_fn");
     loop {
-        story.log("worker thread recv".to_string());
+        story.log("worker thread recv");
         //first, try receiving on the preferred channel
         let task = match bin.preferred_receiver.recv_timeout(Duration::ZERO) {
             Ok(task) => task,
@@ -213,11 +213,11 @@ fn thread_user_waiting_entrypoint_fn() {
                 }
             }
         };
-        story.log("worker thread recv done".to_string());
+        story.log("worker thread recv done");
 
         match task {
             ThreadMessage::Idle => {
-                story.log("worker thread sees idle message".to_string());
+                story.log("worker thread sees idle message");
                 let last_check = last_useful.elapsed();
                 if last_check > TARGET_IDLE_TIME {
                     let update_result = GlobalState::global().update_thread_counts(|counts| {
@@ -226,15 +226,15 @@ fn thread_user_waiting_entrypoint_fn() {
                         }
                     });
                     if update_result.is_ok() {
-                        story.log("worker thread shutdown".to_string());
+                        story.log("worker thread shutdown");
                         return;
                     }
                     else {
-                        story.log("worker thread WONT shutdown as it's the only thread".to_string());
+                        story.log("worker thread WONT shutdown as it's the only thread");
                     }
                 }
                 else {
-                    story.log(crate::stories::format_story!("worker thread WONT shutdown as it was recently used {last_check:?}"));
+                    story.log(&crate::stories::format_story!("worker thread WONT shutdown as it was recently used {last_check:?}"));
 
                 }
             }
@@ -245,7 +245,7 @@ fn thread_user_waiting_entrypoint_fn() {
                     //safety: contract ought to be correctly implemented
                     let full_waker =  Waker::from_raw(waker);
                     let mut context = Context::from_waker(&full_waker);
-                    story.log("worker thread doing work".to_string());
+                    story.log("worker thread doing work");
                     match unsafe_future.poll(&mut context) {
                         Poll::Ready(_) => {
                             //done!
@@ -257,13 +257,13 @@ fn thread_user_waiting_entrypoint_fn() {
                     std::mem::drop(full_waker); //explicit drop here
                     std::mem::drop(unsafe_future);
                 }
-                story.log("worker thread done with work".to_string());
+                story.log("worker thread done with work");
                 last_useful = Instant::now();
             }
             ThreadMessage::Simple(job) => {
-                story.log("worker thread doing work".to_string());
+                story.log("worker thread doing work");
                 job();
-                story.log("worker thread done with work".to_string());
+                story.log("worker thread done with work");
                 last_useful = Instant::now();
 
             }
@@ -285,16 +285,16 @@ fn user_waiting_timer_callback() {
     //We want to send out as many messages as reasonable.
     //Note that we don't have to get this exactly
     let story = Story::new();
-    story.log(format!("timer"));
+    story.log(&format_story!("timer"));
     let thread_counts: ThreadCounts = GlobalState::global().read_thread_counts();
     //the idea here is we gently avoid filling the queue.  The actual policy tends to be enforced by the workers.
     //This is because, in theory, the timer can execute faster than workers.  It's possible for multiple timers
     //to run before a worker is listening.
     if thread_counts.user_waiting > USER_WAITING_MIN_THREADS { //leave some threads
-        story.log(format!("sending idle message to {} of {} threads",thread_counts.user_waiting/2,thread_counts.user_waiting));
+        story.log(&format_story!("sending idle message to {} of {} threads",thread_counts.user_waiting/2,thread_counts.user_waiting));
         for _ in 0..thread_counts.user_waiting / 2 {
             //ask up to half the threads to shut down.
-            story.log(format!("send idle message"));
+            story.log(&format_story!("send idle message"));
             Bin::user_waiting().sender.send(ThreadMessage::Idle).unwrap();
         }
     }
@@ -369,7 +369,7 @@ impl Bin {
                 //In this case, we need to launch some threads.  We promised we would go up to proposed_threads, so the launch amount is
                 let old_threadcount: ThreadCounts = old_threads.into();
                 let launch_amount = proposed_threads - old_threadcount.user_waiting;
-                story.log(format!("launching {launch_amount} new threads"));
+                story.log(&format_story!("launching {launch_amount} new threads"));
                 for i in 0..launch_amount {
                     let priority = match self.which_bin {
                         WhichBin::UserWaiting => {Priority::UserWaiting}

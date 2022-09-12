@@ -3,7 +3,7 @@ Sets that build vecs of values.
 */
 
 use crate::global::GlobalState;
-use crate::stories::Story;
+use crate::stories::{Story,format_story};
 
 
 pub enum Strategy {
@@ -161,13 +161,13 @@ pub async fn set_sync<F,O>(priority: priority::Priority, len: usize, strategy: S
             }
         }
         let base = item.base;
-        item.story.log(format!("Built from {base} to {slot}"));
+        item.story.log(&format_story!("Built from {base} to {slot}"));
     };
     //println!("launching {fut_len} tasks");
     let story = Story::new();
-    story.log(format!("vec set await of length {fut_len}"));
+    story.log(&format_story!("vec set await of length {fut_len}"));
     super::set_simple_scoped(priority, jobs.len().try_into().unwrap(), &job_creator ).await;
-    story.log("vec set complete".to_string());
+    story.log("vec set complete");
     unsafe{output.set_len(len)};
     output
 }
