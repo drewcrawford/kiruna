@@ -58,7 +58,7 @@ They have some impressive benchmarks but I was not immediately able to understan
 A brief examination also suggests they use locks, which I am somewhat skeptical
 about for the workload.  I would be willing to believe benchmarks if I could replicate them, but I cannot.
  */
-use crossbeam_channel::{Receiver, select, Sender};
+use flume::{Receiver,select::Selector,Sender};
 use priority::Priority;
 
 use crate::global::{GlobalState, ThreadCounts};
@@ -207,10 +207,10 @@ fn thread_user_waiting_entrypoint_fn() {
             Ok(task) => task,
             Err(..) => {
                 //now select on them both
-                select! {
-                    recv(bin.preferred_receiver) -> msg => msg.unwrap(),
-                    recv(bin.receiver) -> msg => msg.unwrap()
-                }
+                Selector::new()
+                    .recv(&bin.preferred_receiver, |task| task)
+                    .recv(&bin.receiver, |task| task)
+                    .wait().unwrap()
             }
         };
         story.log("worker thread recv done");
@@ -306,8 +306,8 @@ impl Bin {
         static USER_WAITING_BIN: OnceCell<Bin> = OnceCell::new();
         
         USER_WAITING_BIN.get_or_init(|| {
-            let (sender, receiver) = crossbeam_channel::bounded(1_000_000);
-            let (preferred_sender,preferred_receiver) = crossbeam_channel::bounded(1_000_000);
+            let (sender, receiver) = flume::bounded(1_000_000);
+            let (preferred_sender,preferred_receiver) = flume::bounded(1_000_000);
             Bin {
               sender: sender,
                 receiver,

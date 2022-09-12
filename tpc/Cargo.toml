@@ -9,7 +9,7 @@ edition = "2021"
 priority = {path = "../priority"}
 once_cell = "~1"
 #libc = "~0"
-crossbeam-channel = "~0"
+flume = "~0.10"
 atomic-waker = "~1"
 spawn = {path = "../spawn"}
 
