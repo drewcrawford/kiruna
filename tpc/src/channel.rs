@@ -1,5 +1,44 @@
 /*!
 A custom channel with lower latency than crossbeam_channel.
+
+# History
+
+A brief discussion of the history of this channel.
+
+Originally, I somewhat reluctantly used crossbeam-channel.  For reasons in the next section, we use their queue, so why not the whole channel?
+
+In fact, it is very good for high-throughput situations.  But in cases where you have low throughput and are worried about latency,
+the `park` implementation is quite slow, I think it implements its own exponential backoff which is not what we want.
+
+It is an interesting question how "important" of a problem this is - for example, maybe we want to push low throughput into a different
+executor like kiruna::Sync.  On some level, a threadpool that moves futures across threads is always going to be slower than a threadpool
+that is not.  However, crossbeam-channel is somewhat egregious and I believe this case can at least be improved.
+
+I also took a look at Flume.  In fact it solves the low-threadpool case very well.  However on the vec benchmarks it is significantly slower
+than crossbeam-channel.  I believe this is due to its use of internal locks, which crossbeam can avoid via its lock-free queue.
+
+So I decided to write my own channel, encoding some of the peculariaties of kiruna::tpc.  In particular, we have a hierarchical channel,
+the number of levels of which are known at build-time, rather than APIs like `select` that wait for a message to arrive on any channel
+from a set of channels known at runtime.
+
+This approach benchmarks interchangeably with crossbeam-channel on high-throughput, and is substantially better at low-latency.
+So.  I think it is a good choice for kiruna::tpc.
+
+# queue
+A brief discussion of the dependency on crossbeam_queue.
+
+I looked into writing my own atomic queue.  I even designed one that seems in a cursory examination to be better
+than the widely-used michael-scott scheme (it is easier to analyze at least, which makes it a good fit for kiruna's goals).
+
+It seems that algorithms in the class, including my design, need some actual non-arc GC.  There's a window of time
+where a reference count has reached zero and some other thread is trying to acquire it; to solve this you have to defer
+the deallocation 'awhile', or have some scheme where you tag pointers in the unused bits to fit them in a word,
+and decide not to reference them because they have old tags, etc.
+
+I think writing a garbage collector is a little outside my scope at present, and the best queue based on an existing gc is going to
+be the crossbeam queue.  I think it is not totally optimal on weakly-ordered memory machines but.
+
+
  */
 use crate::platform::Semaphore;
 

@@ -39,25 +39,7 @@ use once_cell::sync::OnceCell;
 use crate::platform::*;
 use spawn::{MicroPriority, spawn_thread};
 
-/*
-A brief discussion of this dependency.
 
-I looked into writing my own atomic queue.  I even designed one that seems in a cursory examination to be better
-than the widely-used michael-scott scheme (it is easier to analyze at least, which makes it a good fit for kiruna's goals).
-
-It seems that algorithms in the class, including my design, need some actual non-arc GC.  There's a window of time
-where a reference count has reached zero and some other thread is trying to acquire it; to solve this you have to defer
-the deallocation 'awhile', or have some scheme where you tag pointers in the unused bits to fit them in a word,
-and decide not to reference them because they have old tags, etc.
-
-I think writing a garbage collector is a little outside my scope at present, and the best queue based on an existing gc is going to
-be the crossbeam channel.  I think it is not totally optimal on weakly-ordered memory machines but.
-
-I also looked briefly into flume, which is perhaps kiruna's "flavor" of simple dependency.
-They have some impressive benchmarks but I was not immediately able to understand how to replicate their mpmc tests.
-A brief examination also suggests they use locks, which I am somewhat skeptical
-about for the workload.  I would be willing to believe benchmarks if I could replicate them, but I cannot.
- */
 use crate::channel::{Channel};
 use priority::Priority;
 
