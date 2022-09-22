@@ -22,8 +22,9 @@ use std::fmt::Formatter;
 use std::future::Future;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use windows::core::InParam;
-use windows::Storage::Streams::{IBuffer, InputStreamOptions};
+use windows::Storage::Streams::{IBuffer, InputStreamOptions, IRandomAccessStreamWithContentType};
 use windows::Storage::Streams::Buffer as WinBuffer;
+use priority::Priority;
 
 #[derive(thiserror::Error,Debug)]
 #[non_exhaustive]
@@ -99,12 +100,50 @@ fn fix_path(path: &Path) -> OsString {
     let path: OsString = OsStringExt::from_wide(&collect);
     path
 }
-pub struct Read;
+pub struct Read {
+    input_stream: UnsafeSend<IRandomAccessStreamWithContentType>,
+}
+impl Drop for Read {
+    fn drop(&mut self) {
+        self.input_stream.0.Close().unwrap();
+    }
+}
 
 struct UnsafeSend<T>(T);
 unsafe impl<T> Send for UnsafeSend<T> {}
 
 impl Read {
+    ///Reads a slice of bytes from the file at the specified offset.
+    ///
+    /// The offset is relative to the start of the file.
+    pub fn read(&mut self, offset: usize, size: usize) -> impl Future<Output=Result<Buffer,Error>> + Send + '_ {
+        async move {
+            self.input_stream.0.Seek(offset.try_into().unwrap()).unwrap();
+            let capacity_u32 = size as u32;
+            let buffer = WinBuffer::Create(capacity_u32)?;
+            let as_ibuffer: UnsafeSend<IBuffer> = UnsafeSend(buffer.try_into().unwrap());
+            let op = {self.input_stream.0.ReadAsync(InParam::borrowed(windows::core::Borrowed::new(Some(&as_ibuffer.0))),capacity_u32,InputStreamOptions::None)?};
+            op.await?;
+            Ok(Buffer::new(as_ibuffer.0))
+        }
+    }
+    pub fn new(path: &Path, _priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send {
+        let path = fix_path(path);
+        let mut header = MaybeUninit::uninit();
+        let path_param = unsafe{path.into_hstring_trampoline(&mut header)};
+        let storage_file = StorageFile::GetFileFromPathAsync(&path_param).unwrap();
+        async {
+            let storage_file = UnsafeSend(storage_file.await?);
+            let input_fut = {
+                storage_file.0.OpenReadAsync()?
+            };
+            let input_stream = UnsafeSend(input_fut.await?);
+            Ok(Self {
+                input_stream,
+            })
+        }
+
+    }
     /**
     This windows-only API is unstable.
 
@@ -147,6 +186,7 @@ impl Read {
             };
 
             let read_buffer = fut.await?;
+            input_stream.0.Close()?;
             let public_buffer = Buffer::new(read_buffer);
             Ok(public_buffer)
         }

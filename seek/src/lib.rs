@@ -1,6 +1,4 @@
-/*
-for test purposes: the 62nd character in the file is here: abcdefgh
- */
+/*for test purposes: the 62nd character in the file is here: abcdefgh  */
 /*!
 A personality based on async reads/writes.  This is generally preferred where
 
@@ -27,10 +25,13 @@ impl Read {
             fut.await.map(|o| Buffer(o)).map_err(|e| Error(e))
         }
     }
-    pub fn new(path: &Path, priority: Priority) -> Self {
-        Self(imp::Read::new(path, priority))
+    pub fn new(path: &Path, priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send + '_ {
+        async move {
+            let r = imp::Read::new(path, priority).await;
+            r.map(|o| Read(o)).map_err(|e| Error(e))
+        }
     }
-    pub fn read(&mut self, offset: usize, size: usize) -> impl Future<Output=Result<Buffer,Error>> + Send {
+    pub fn read(&mut self, offset: usize, size: usize) -> impl Future<Output=Result<Buffer,Error>> + Send + '_ {
         let fut = self.0.read(offset, size);
         async {
             fut.await.map(|o| Buffer(o)).map_err(|e| Error(e))
@@ -82,8 +83,9 @@ use crate::macos as imp;
     let components_iter = path.components();
     let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
 
-    let mut r = Read::new(&path, Priority::Testing);
-    let read_fut = r.read(62, 8);
+    let file_fut = Read::new(&path, Priority::Testing);
+    let mut r = kiruna::test::test_await(file_fut, std::time::Duration::from_secs(1)).unwrap();
+    let read_fut = r.read(61, 8);
     let buffer = kiruna::test::test_await(read_fut, std::time::Duration::from_secs(10)).unwrap();
     let slice = buffer.as_slice();
     //uh...
