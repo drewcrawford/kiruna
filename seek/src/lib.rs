@@ -1,3 +1,6 @@
+/*
+for test purposes: the 62nd character in the file is here: abcdefgh
+ */
 /*!
 A personality based on async reads/writes.  This is generally preferred where
 
@@ -13,13 +16,22 @@ impl Buffer {
     }
 }
 
-pub struct Read;
+pub struct Read(imp::Read);
 impl Read {
     /**
     Asynchronous read; reads the entire contents of a file.
      */
     pub fn all(path: &Path, priority: priority::Priority, release_pool: &ReleasePool) -> impl Future<Output=Result<Buffer,Error>> + Send {
         let fut = imp::Read::all(path, priority, release_pool);
+        async {
+            fut.await.map(|o| Buffer(o)).map_err(|e| Error(e))
+        }
+    }
+    pub fn new(path: &Path, priority: Priority) -> Self {
+        Self(imp::Read::new(path, priority))
+    }
+    pub fn read(&mut self, offset: usize, size: usize) -> impl Future<Output=Result<Buffer,Error>> + Send {
+        let fut = self.0.read(offset, size);
         async {
             fut.await.map(|o| Buffer(o)).map_err(|e| Error(e))
         }
@@ -37,6 +49,7 @@ mod windows;
 use std::future::Future;
 use std::path::Path;
 use pcore::release_pool::ReleasePool;
+use priority::Priority;
 #[cfg(target_os = "windows")]
 use crate::windows as imp;
 
@@ -60,7 +73,22 @@ use crate::macos as imp;
         let slice2 = "The call is coming from INSIDE the building.".as_bytes();
         assert!(slice.windows(slice2.len()).any(|w| w==slice2))
     })
+}
 
+#[test] fn read_offset() {
+    use std::path::PathBuf;
+    //for whatever reason, this is a "relative" path, but it includes the current directory??
+    let path = Path::new(file!());
+    let components_iter = path.components();
+    let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
+
+    let mut r = Read::new(&path, Priority::Testing);
+    let read_fut = r.read(62, 8);
+    let buffer = kiruna::test::test_await(read_fut, std::time::Duration::from_secs(10)).unwrap();
+    let slice = buffer.as_slice();
+    //uh...
+    let slice2 = "abcdefgh".as_bytes();
+    assert!(slice.windows(slice2.len()).any(|w| w==slice2))
 }
 
 #[test] fn stress_test() {
