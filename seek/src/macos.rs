@@ -58,7 +58,7 @@ impl Read {
             r.map(|d| Buffer(Contiguous::new(d))).map_err(|e| DispatchError(e))
         }
     }
-    pub fn new(path: &Path, priority: Priority) -> Self {
+    pub fn new(path: &Path, priority: Priority) -> impl Future<Output=Result<Self,Error>> {
         let queue = match priority {
             priority::Priority::UserWaiting | priority::Priority::Testing => {
                 dispatchr::queue::global(QoS::UserInitiated).unwrap()
@@ -67,11 +67,13 @@ impl Read {
         };
         let file = File::open(path).unwrap();
         let fd = file.as_fd().as_raw_fd();
-        let io = dispatchr::io::IO::new(dispatch_io_type_t::RANDOM, dispatchr::io::dispatch_fd_t::new(fd),queue).unwrap();
-        Self {
-            _file: file,
-            io,
-            priority,
+        let io = dispatchr::io::IO::new(dispatch_io_type_t::RANDOM, dispatchr::io::dispatch_fd_t::new(fd), queue).unwrap();
+        async move {
+            Ok(Self {
+                _file: file,
+                io,
+                priority,
+            })
         }
 
     }
