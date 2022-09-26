@@ -15,7 +15,7 @@ pub fn spawn_thread<F: FnOnce() + Send + 'static>(priority: Priority,_micro_prio
     let boxed_fn = Box::new(f);
     let boxed_raw = Box::into_raw(boxed_fn);
     let thread_suspended = THREAD_CREATION_FLAGS(0x00000004);
-    let handle = unsafe{CreateThread(std::ptr::null_mut(), stack_size_bytes, Some(routine::<F>), boxed_raw as *const c_void, thread_suspended, std::ptr::null_mut())}.unwrap();
+    let handle = unsafe{CreateThread(None, stack_size_bytes, Some(routine::<F>), Some(boxed_raw as *const c_void), thread_suspended, None)}.unwrap();
     let priority = match priority {
         Priority::UserWaiting | Priority::Testing =>  THREAD_PRIORITY_ABOVE_NORMAL,
         _ => todo!()

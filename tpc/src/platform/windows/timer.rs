@@ -28,7 +28,7 @@ impl Timer {
         environment.Size = std::mem::size_of::<TP_CALLBACK_ENVIRON_V3>().try_into().unwrap();
         //cast fn pointer to the type windows-rs actually expects
         let cast_fn:  extern "system" fn (a: *mut TP_CALLBACK_INSTANCE, b: *mut c_void, c: *mut TP_TIMER) = unsafe{std::mem::transmute(call_me)};
-        let timer = unsafe{CreateThreadpoolTimer(Some(cast_fn), call_me as *const c_void as *mut c_void, &environment)};
+        let timer = unsafe{CreateThreadpoolTimer(Some(cast_fn), Some(call_me as *const c_void as *mut c_void), Some(&environment))};
         assert!(timer != std::ptr::null_mut());
 
         let mut due_time = FILETIME::default();
@@ -36,7 +36,7 @@ impl Timer {
         let ns_100: u64 = (interval.as_nanos() / 100).try_into().unwrap();
         due_time.dwLowDateTime = (ns_100 & 0xffffffff) as u32;
         due_time.dwHighDateTime = ((ns_100 & 0xffffffff00000000) >> 32) as u32;
-        unsafe{SetThreadpoolTimer(timer, &due_time, interval.as_millis().try_into().unwrap(), leeway.as_millis().try_into().unwrap())};
+        unsafe{SetThreadpoolTimer(timer, Some(&due_time), interval.as_millis().try_into().unwrap(), leeway.as_millis().try_into().unwrap())};
         Self { timer }
     }
 }

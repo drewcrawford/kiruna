@@ -6,25 +6,25 @@ pub struct Semaphore {
 }
 impl Semaphore {
     pub fn new() -> Self {
-        let s = unsafe{CreateSemaphoreW(std::ptr::null(), 0, i32::MAX, None).unwrap()};
+        let s = unsafe{CreateSemaphoreW(None, 0, i32::MAX, None).unwrap()};
         Self {
             semaphore: s,
         }
     }
     pub fn signal(&self) {
-        unsafe{ReleaseSemaphore(self.semaphore, 1, std::ptr::null_mut()).unwrap()};
+        unsafe{ReleaseSemaphore(self.semaphore, 1, None).unwrap()};
     }
     pub fn decrement_immediate(&self) -> Result<(), ()> {
         unsafe {
             match WaitForSingleObject(self.semaphore, 0) {
-                result if result == WAIT_OBJECT_0.0 => {
+                result if result == WAIT_OBJECT_0 => {
                     Ok(())
                 }
-                result if result == WAIT_TIMEOUT.0 => {
+                result if result == WAIT_TIMEOUT => {
                     Err(())
                 }
                 other => {
-                    panic!("unexpected result from WaitForSingleObject: {}", other);
+                    panic!("unexpected result from WaitForSingleObject: {:?}", other);
                 }
             }
         }
@@ -32,11 +32,11 @@ impl Semaphore {
     pub fn wait_forever(&self) {
         unsafe {
             match WaitForSingleObject(self.semaphore, u32::MAX) {
-                result if result == WAIT_OBJECT_0.0 => {
+                result if result == WAIT_OBJECT_0 => {
                     /* ok! */
                 }
                 other => {
-                    panic!("unexpected result from WaitForSingleObject: {}", other);
+                    panic!("unexpected result from WaitForSingleObject: {:?}", other);
                 }
             }
         }

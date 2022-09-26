@@ -103,7 +103,7 @@ impl ReadChild {
             //note that on windows, this will return on the current thread, therefore we don't have to deal with Send etc
             let next_write = as_mut.buffer.0.as_mut_ptr().add(as_mut.buffer.0.len());
 
-            let result = ReadFileEx(handle, next_write as *mut c_void, READ_SIZE as u32, overlapped_mut, Some(completion));
+            let result = ReadFileEx(handle, Some(next_write as *mut c_void), READ_SIZE as u32, overlapped_mut, Some(completion));
             if result.0 != 0 {
                 //everything is fine
                 Poll::Pending
