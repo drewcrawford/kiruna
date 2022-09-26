@@ -26,7 +26,7 @@ pub fn threadpool_size() -> u16 {
 
     //Get total number (size) of elements in the datastructure
     let mut returned_len = MaybeUninit::uninit();
-    unsafe { GetSystemCpuSetInformation(std::ptr::null_mut(), 0, returned_len.assume_init_mut(), handle, 0); }
+    unsafe { GetSystemCpuSetInformation(None, 0, returned_len.assume_init_mut(), handle, 0); }
 
     //so that size is specified in bytes, but it's a little bit unclear to me how to satisfy the alignment requirements
     //of the type, if any.  My guess is microsoft doesn't require any alignment, but I'm not so confident that rust is
@@ -36,7 +36,7 @@ pub fn threadpool_size() -> u16 {
     let alloc = unsafe { std::alloc::alloc(alloc_layout) };
 
 
-    let r = unsafe { GetSystemCpuSetInformation(alloc as *mut _, _returned_len, returned_len.assume_init_mut(), handle, 0) };
+    let r = unsafe { GetSystemCpuSetInformation(Some(alloc as *mut _), _returned_len, returned_len.assume_init_mut(), handle, 0) };
     assert!(r.as_bool()); //docs suggest this cannot fail.
 
     let mut byte_offset = 0;

@@ -16,7 +16,7 @@ struct WinSemaphore(HANDLE);
 impl WinSemaphore {
     fn new() -> Self {
         use windows::Win32::System::Threading::CreateSemaphoreA;
-        let handle = unsafe{ CreateSemaphoreA(std::ptr::null_mut(), 0, 2, PCSTR(std::ptr::null_mut()))};
+        let handle = unsafe{ CreateSemaphoreA(None, 0, 2, PCSTR(std::ptr::null_mut()))};
         Self(handle.unwrap())
     }
 }
@@ -50,7 +50,7 @@ impl WorkerThread {
             //enter an alertable wait state
             let reason = unsafe{ WaitForSingleObjectEx(self.semaphore.0, u32::MAX, true)};
             use windows::Win32::Foundation::WAIT_OBJECT_0;
-            if reason == WAIT_OBJECT_0.0 {
+            if reason == WAIT_OBJECT_0 {
                 //at this point, we have woken because some fn was scheduled
                 //(there are other reasons we might wake, in particular, AIO completion)
                 let r = unsafe{self.receiver.only_one_thread()}.recv().unwrap();
@@ -73,7 +73,7 @@ impl Threadpool {
         self.sender.send(Box::new(f)).unwrap();
         //evidently you 'release' a sempahore to signal it in win32
         use windows::Win32::System::Threading::ReleaseSemaphore;
-        unsafe{ ReleaseSemaphore(self.worker.semaphore.0, 1, std::ptr::null_mut())};
+        unsafe{ ReleaseSemaphore(self.worker.semaphore.0, 1, None)};
     }
 }
 

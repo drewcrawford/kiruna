@@ -74,7 +74,7 @@ impl<Slice: AsSlice> PayloadTrait for WriteOp<Slice> {
                 hEvent: h_event,
             };
             let slice = self.buffer.as_slice();
-            let r = WriteFileEx(handle,slice.as_ptr() as *const c_void,slice.len() as u32, overlapped_mut, Some(completion));
+            let r = WriteFileEx(handle,Some(slice.as_ptr() as *const c_void),slice.len() as u32, overlapped_mut, Some(completion));
             if r.0 == 0 {
                 Poll::Ready(Err(OSError(GetLastError())))
             }

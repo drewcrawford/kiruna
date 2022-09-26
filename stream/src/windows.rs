@@ -16,7 +16,7 @@ impl std::fmt::Display for OSError {
         let buf_len = unsafe {
             FormatMessageA(
                 FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
-                std::ptr::null(),
+                None,
                 self.0.0,
                 //If you pass in zero, FormatMessage looks for a message for LANGIDs in the following order
                 0,
@@ -25,7 +25,7 @@ impl std::fmt::Display for OSError {
                 std::mem::transmute(&mut buf),
                 // If FORMAT_MESSAGE_ALLOCATE_BUFFER is set, this parameter specifies the minimum number of TCHARs to allocate for an output buffer.
                 0,
-                std::ptr::null_mut(),
+                None,
             )
         };
         let as_slice = unsafe{ std::slice::from_raw_parts(buf, buf_len as usize)};
