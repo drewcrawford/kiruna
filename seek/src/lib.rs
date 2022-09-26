@@ -84,7 +84,7 @@ use crate::macos as imp;
     let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
 
     let file_fut = Read::new(&path, Priority::Testing);
-    let mut r = kiruna::test::test_await(file_fut, std::time::Duration::from_secs(1)).unwrap();
+    let mut r = kiruna::test::test_await(file_fut, std::time::Duration::from_secs(10)).unwrap();
     let read_fut = r.read(61, 8);
     let buffer = kiruna::test::test_await(read_fut, std::time::Duration::from_secs(10)).unwrap();
     let slice = buffer.as_slice();
