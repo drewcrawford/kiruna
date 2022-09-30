@@ -12,6 +12,10 @@ impl Buffer {
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
     }
+    #[cfg(target_os="macos")]
+    pub fn as_dispatch_data(&self) -> &dispatchr::data::Unmanaged {
+        self.0.as_dispatch_data()
+    }
 }
 
 pub struct Read(imp::Read);

@@ -4,7 +4,7 @@ use std::os::raw::c_int;
 use std::os::unix::io::{AsFd, AsRawFd};
 use std::path::Path;
 use blocksr::continuation::{Completer, Continuation};
-use dispatchr::data::{Contiguous, DispatchData};
+use dispatchr::data::{Contiguous, DispatchData, Unmanaged};
 use dispatchr::io::{dispatch_io_type_t, IO};
 use dispatchr::QoS;
 use pcore::release_pool::ReleasePool;
@@ -12,6 +12,11 @@ use priority::Priority;
 use crate::imp::Error::DispatchError;
 
 pub struct Buffer(Contiguous);
+impl Buffer {
+    pub fn as_dispatch_data(&self) -> &Unmanaged {
+        self.0.as_dispatch_data()
+    }
+}
 pub struct Read {
     _file: File,
     io: IO,
