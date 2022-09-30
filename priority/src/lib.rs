@@ -13,7 +13,7 @@
 /// Priority can be converted into various other types like OSReadOptions or OSWriteOptions.
 /// Doing so may lose a bit of control but is sufficient for most applications.
 #[non_exhaustive]
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy,Clone,Debug,PartialEq)]
 pub enum Priority {
     ///The user is actively blocked waiting for the result.  This is a high-priority task, but not realtime.
     UserWaiting,
