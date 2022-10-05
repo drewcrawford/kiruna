@@ -13,7 +13,7 @@ This personality is implemented only on Windows.  All APIs should be considered 
 mod ibuffer;
 
 use std::ffi::OsString;
-use std::path::{Path};
+use std::path::{Path, PathBuf};
 use windows::Storage::StorageFile;
 use pcore::string::IntoParameterString;
 use pcore::release_pool::{ReleasePool};
@@ -103,12 +103,14 @@ fn fix_path(path: &Path) -> OsString {
 #[derive(Debug)]
 pub struct Read {
     input_stream: UnsafeSend<IRandomAccessStreamWithContentType>,
+    initial_path: PathBuf,
 }
 impl Drop for Read {
     fn drop(&mut self) {
         self.input_stream.0.Close().unwrap();
     }
 }
+
 
 #[derive(Debug)]
 struct UnsafeSend<T>(T);
@@ -129,10 +131,9 @@ impl Read {
             Ok(Buffer::new(as_ibuffer.0))
         }
     }
-    pub fn new(path: &Path, _priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send {
-        let path = fix_path(path);
+    pub fn new(path: PathBuf, _priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send {
         let mut header = MaybeUninit::uninit();
-        let path_param = unsafe{path.into_hstring_trampoline(&mut header)};
+        let path_param = unsafe{path.clone().into_hstring_trampoline(&mut header)};
         let storage_file = StorageFile::GetFileFromPathAsync(&path_param).unwrap();
         async {
             let storage_file = UnsafeSend(storage_file.await?);
@@ -142,9 +143,12 @@ impl Read {
             let input_stream = UnsafeSend(input_fut.await?);
             Ok(Self {
                 input_stream,
+                initial_path: path,
             })
         }
-
+    }
+    pub async fn async_clone(&self,priority: priority::Priority) -> Result<Self,Error> {
+        Self::new(self.initial_path.clone(), priority).await
     }
     /**
     This windows-only API is unstable.

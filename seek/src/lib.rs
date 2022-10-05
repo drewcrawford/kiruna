@@ -30,7 +30,7 @@ impl Read {
             fut.await.map(|o| Buffer(o)).map_err(|e| Error(e))
         }
     }
-    pub fn new(path: &Path, priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send + '_ {
+    pub fn new(path: PathBuf, priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send  {
         async move {
             let r = imp::Read::new(path, priority).await;
             r.map(|o| Read(o)).map_err(|e| Error(e))
@@ -41,6 +41,18 @@ impl Read {
         async {
             fut.await.map(|o| Buffer(o)).map_err(|e| Error(e))
         }
+    }
+    /**
+    Asynchronously clones the [Read] object.
+
+    The result is an independent read object that can be used to read the same file; it has
+    a separate position into the file.
+
+    On some platforms this may create new file IO.  On others it may be a cheap clone.
+    */
+    pub async fn async_clone(&self, priority: priority::Priority) -> Result<Self,Error> {
+        let r = self.0.async_clone(priority).await;
+        r.map(|o| Read(o)).map_err(|e| Error(e))
     }
 }
 #[derive(Debug,boil::Display,boil::Error)]
@@ -53,7 +65,7 @@ impl Error {
 mod windows;
 
 use std::future::Future;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use pcore::release_pool::ReleasePool;
 use priority::Priority;
 #[cfg(target_os = "windows")]
@@ -88,7 +100,7 @@ use crate::macos as imp;
     let components_iter = path.components();
     let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
 
-    let file_fut = Read::new(&path, Priority::Testing);
+    let file_fut = Read::new(path, Priority::Testing);
     let mut r = kiruna::test::test_await(file_fut, std::time::Duration::from_secs(10)).unwrap();
     let read_fut = r.read(61, 8);
     let buffer = kiruna::test::test_await(read_fut, std::time::Duration::from_secs(10)).unwrap();
