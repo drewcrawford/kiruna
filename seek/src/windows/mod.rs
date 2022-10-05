@@ -100,6 +100,7 @@ fn fix_path(path: &Path) -> OsString {
     let path: OsString = OsStringExt::from_wide(&collect);
     path
 }
+#[derive(Debug)]
 pub struct Read {
     input_stream: UnsafeSend<IRandomAccessStreamWithContentType>,
 }
@@ -109,6 +110,7 @@ impl Drop for Read {
     }
 }
 
+#[derive(Debug)]
 struct UnsafeSend<T>(T);
 unsafe impl<T> Send for UnsafeSend<T> {}
 

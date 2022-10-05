@@ -14,6 +14,7 @@ impl Buffer {
     }
 }
 
+#[derive(Debug)]
 pub struct Read(imp::Read);
 impl Read {
     /**

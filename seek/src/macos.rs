@@ -12,6 +12,7 @@ use priority::Priority;
 use crate::imp::Error::DispatchError;
 
 pub struct Buffer(Contiguous);
+#[derive(Debug)]
 pub struct Read {
     _file: File,
     io: IO,
