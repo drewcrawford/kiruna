@@ -2,7 +2,7 @@ use std::fs::File;
 use std::future::Future;
 use std::os::raw::c_int;
 use std::os::unix::io::{AsFd, AsRawFd};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use blocksr::continuation::{Completer, Continuation};
 use dispatchr::data::{Contiguous, DispatchData, Unmanaged};
 use dispatchr::io::{dispatch_io_type_t, IO};
@@ -64,7 +64,7 @@ impl Read {
             r.map(|d| Buffer(Contiguous::new(d))).map_err(|e| DispatchError(e))
         }
     }
-    pub fn new(path: &Path, priority: Priority) -> impl Future<Output=Result<Self,Error>> {
+    pub fn new(path: PathBuf, priority: Priority) -> impl Future<Output=Result<Self,Error>> {
         let queue = match priority {
             priority::Priority::UserWaiting | priority::Priority::Testing => {
                 dispatchr::queue::global(QoS::UserInitiated).unwrap()
@@ -119,5 +119,15 @@ impl Read {
             let r = continuation.await;
             r.map(|d| Buffer(Contiguous::new(d))).map_err(|e| DispatchError(e))
         }
+    }
+    pub async fn async_clone(&self, priority: kiruna::Priority) -> Result<Self,Error> {
+        Ok(
+            Self {
+                //since this is only used to keep the file open, I think there is no problem with re-using it.
+                _file: self._file.try_clone()?,
+                io: self.io.clone(),
+                priority
+            }
+        )
     }
 }
