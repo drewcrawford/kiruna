@@ -17,6 +17,7 @@ impl Buffer {
         self.0.as_dispatch_data()
     }
 }
+#[derive(Debug)]
 pub struct Read {
     _file: File,
     io: IO,
