@@ -30,7 +30,7 @@ impl Read {
             fut.await.map(|o| Buffer(o)).map_err(|e| Error(e))
         }
     }
-    pub fn new(path: PathBuf, priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send  {
+    pub fn new(path: &Path, priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send + '_  {
         async move {
             let r = imp::Read::new(path, priority).await;
             r.map(|o| Read(o)).map_err(|e| Error(e))
@@ -65,7 +65,7 @@ impl Error {
 mod windows;
 
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 use pcore::release_pool::ReleasePool;
 use priority::Priority;
 #[cfg(target_os = "windows")]
@@ -100,7 +100,7 @@ use crate::macos as imp;
     let components_iter = path.components();
     let path = components_iter.skip(1).fold(PathBuf::new(), |mut a,b| {a.push(b); a});
 
-    let file_fut = Read::new(path, Priority::Testing);
+    let file_fut = Read::new(&path, Priority::Testing);
     let mut r = kiruna::test::test_await(file_fut, std::time::Duration::from_secs(10)).unwrap();
     let read_fut = r.read(61, 8);
     let buffer = kiruna::test::test_await(read_fut, std::time::Duration::from_secs(10)).unwrap();
