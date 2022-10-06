@@ -131,7 +131,8 @@ impl Read {
             Ok(Buffer::new(as_ibuffer.0))
         }
     }
-    pub fn new(path: &Path, _priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send + '_ {
+    pub fn new(orig_path: &Path, _priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send + '_ {
+        let path = fix_path(orig_path);
         let mut header = MaybeUninit::uninit();
         let path_param = unsafe{path.clone().into_hstring_trampoline(&mut header)};
         let storage_file = StorageFile::GetFileFromPathAsync(&path_param).unwrap();
@@ -143,7 +144,7 @@ impl Read {
             let input_stream = UnsafeSend(input_fut.await?);
             Ok(Self {
                 input_stream,
-                initial_path: path.to_path_buf(), //note: macos does not require owned here, but windows does
+                initial_path: orig_path.to_path_buf(), //note: macos does not require owned here, but windows does
             })
         }
     }
