@@ -131,7 +131,7 @@ impl Read {
             Ok(Buffer::new(as_ibuffer.0))
         }
     }
-    pub fn new(path: PathBuf, _priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send {
+    pub fn new(path: &Path, _priority: Priority) -> impl Future<Output=Result<Self,Error>> + Send + '_ {
         let mut header = MaybeUninit::uninit();
         let path_param = unsafe{path.clone().into_hstring_trampoline(&mut header)};
         let storage_file = StorageFile::GetFileFromPathAsync(&path_param).unwrap();
@@ -143,12 +143,12 @@ impl Read {
             let input_stream = UnsafeSend(input_fut.await?);
             Ok(Self {
                 input_stream,
-                initial_path: path,
+                initial_path: path.to_path_buf(), //note: macos does not require owned here, but windows does
             })
         }
     }
     pub async fn async_clone(&self,priority: priority::Priority) -> Result<Self,Error> {
-        Self::new(self.initial_path.clone(), priority).await
+        Self::new(&self.initial_path, priority).await
     }
     /**
     This windows-only API is unstable.
