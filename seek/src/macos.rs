@@ -120,7 +120,7 @@ impl Read {
             r.map(|d| Buffer(Contiguous::new(d))).map_err(|e| DispatchError(e))
         }
     }
-    pub async fn async_clone(&self, priority: kiruna::Priority) -> Result<Self,Error> {
+    pub async fn async_clone(&self, priority: priority::Priority) -> Result<Self,Error> {
         Ok(
             Self {
                 //since this is only used to keep the file open, I think there is no problem with re-using it.
