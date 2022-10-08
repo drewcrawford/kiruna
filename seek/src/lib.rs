@@ -18,6 +18,7 @@ impl Buffer {
     }
 }
 
+
 #[derive(Debug)]
 pub struct Read(imp::Read);
 impl Read {
@@ -123,5 +124,11 @@ use crate::macos as imp;
         });
     }
 
+
+
+}
+#[test] fn buffer_send() {
+    fn assert_send<T: Send>() {}
+    assert_send::<Buffer>();
 
 }

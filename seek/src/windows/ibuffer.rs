@@ -3,6 +3,7 @@ use windows::Storage::Streams::IBuffer;
 use windows::Win32::System::WinRT::IBufferByteAccess;
 use windows::core::Interface;
 pub struct Buffer(IBuffer);
+unsafe impl Send for Buffer {}
 impl std::fmt::Debug for Buffer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("Buffer(length={})",self.0.Length().unwrap()))
