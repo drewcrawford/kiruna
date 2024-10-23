@@ -5,6 +5,7 @@ use std::future::Future;
 use dispatchr::io::read_completion;
 use priority::Priority;
 use dispatchr::data::{Managed, Unmanaged, DispatchData};
+use r#continue::continuation;
 
 ///Buffer type.
 ///
@@ -77,16 +78,16 @@ impl Read {
     ///
     /// In practice, this function reads 0 bytes if the stream is closed.
     fn once<'a, O: Into<OSOptions<'a>>>(&self, os_read_options: O) -> impl Future<Output=Result<Managed,OSError>> {
-        let (continuation, completion) = blocksr::continuation::Continuation::<(),_>::new();
+        let (sender,receiver) = continuation();
         read_completion(dispatch_fd_t::new(self.fd), usize::MAX, os_read_options.into().queue, |data,err| {
             if err==0 {
-                completion.complete(Ok(Managed::retain(data)))
+                sender.send(Ok(Managed::retain(data)))
             }
             else {
-                completion.complete(Err(OSError(err)))
+                sender.send(Err(OSError(err)))
             }
         });
-        continuation
+        receiver
     }
 
     ///Reads the entire fd into memory

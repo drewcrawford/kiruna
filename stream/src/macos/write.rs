@@ -4,6 +4,7 @@ use dispatchr::queue::Unmanaged;
 use std::future::Future;
 use dispatchr::io::dispatch_fd_t;
 use dispatchr::data::{DispatchData};
+use r#continue::continuation;
 use crate::{OSError, PriorityDispatch};
 use priority::Priority;
 
@@ -60,27 +61,27 @@ impl Write {
         }
     }
     fn write_data<'a>(&self, buffer: ExternalMemory, write_options: OSOptions<'a>) -> impl Future<Output=Result<(), OSError>> + 'a{
-        let (continuation,completer) = blocksr::continuation::Continuation::<(),_>::new();
+        let (sender,receiver) = continuation();
         dispatchr::io::write_completion(dispatch_fd_t::new(self.fd), &buffer.as_unmanaged(), write_options.queue, |_data, err| {
             if err == 0 {
-                completer.complete(Ok(()))
+                sender.send(Ok(()))
             }
             else {
-                completer.complete(Err(OSError(err)))
+                sender.send(Err(OSError(err)))
             }
         });
-        continuation
+        receiver
     }
     ///A fast path to write static data.
     pub fn write_static<'a,O: Into<OSOptions<'a>>>(&self, buffer: &'static [u8], write_options: O) -> impl Future<Output=Result<(),OSError>> + 'a{
         let as_write_options = write_options.into();
-        let buffer = ExternalMemory::new(StaticBuffer(buffer), as_write_options.queue);
+        let buffer = ExternalMemory::new(StaticBuffer(buffer), Some(as_write_options.queue));
         self.write_data(buffer, as_write_options)
     }
     ///A path that writes heap-allocated data.
     pub async fn write_boxed<'a, O: Into<OSOptions<'a>>>(&self, buffer: Box<[u8]>, write_options: O) -> Result<(),OSError> {
         let as_write_options = write_options.into();
-        let buffer = ExternalMemory::new(BoxedBuffer(buffer), as_write_options.queue);
+        let buffer = ExternalMemory::new(BoxedBuffer(buffer), Some(as_write_options.queue));
         self.write_data(buffer, as_write_options).await
     }
 }

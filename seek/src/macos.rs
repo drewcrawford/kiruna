@@ -3,11 +3,11 @@ use std::future::Future;
 use std::os::raw::c_int;
 use std::os::unix::io::{AsFd, AsRawFd};
 use std::path::{Path};
-use blocksr::continuation::{Completer, Continuation};
 use dispatchr::data::{Contiguous, DispatchData, Unmanaged};
 use dispatchr::io::{dispatch_io_type_t, IO};
 use dispatchr::QoS;
 use pcore::release_pool::ReleasePool;
+use r#continue::continuation;
 use priority::Priority;
 use crate::imp::Error::DispatchError;
 
@@ -49,18 +49,19 @@ impl Read {
             _ => todo!(),
         };
         let file = File::open(path).unwrap();
-        let (continuation,completer) = Continuation::<(), _>::new();
+        let (sender,receiver) = continuation();
+
         dispatchr::io::read_completion(dispatchr::io::dispatch_fd_t::new(file), usize::MAX, queue, move |data, err| {
             if err != 0 {
-                completer.complete(Err(err));
+                sender.send(Err(err));
             }
             else {
                 let managed = dispatchr::data::Managed::retain(data);
-                completer.complete(Ok(managed))
+                sender.send(Ok(managed))
             }
         });
         async {
-            let r = continuation.await;
+            let r = receiver.await;
             r.map(|d| Buffer(Contiguous::new(d))).map_err(|e| DispatchError(e))
         }
     }
@@ -93,30 +94,30 @@ impl Read {
             }
             _ => todo!(),
         };
-        let (continuation,completer) = Continuation::<(), _>::new();
+        let (sender,receiver) = continuation();
         struct Environment {
             //option is for take
             data: Option<dispatchr::data::Managed>,
             //option is for take
-            completer: Option<Completer<Result<dispatchr::data::Managed,i32>>>,
+            completer: Option<r#continue::Sender<Result<dispatchr::data::Managed,i32>>>,
         }
         self.io.read(offset.try_into().unwrap(), size, queue, |environment, done, data, err| {
             if err != 0 {
-                environment.completer.take().unwrap().complete(Err(err));
+                environment.completer.take().unwrap().send(Err(err));
             }
             else {
                 let concat = environment.data.take().unwrap().as_unmanaged().concat(unsafe{&*data});
                 environment.data = Some(concat);
                 if done {
-                    environment.completer.take().unwrap().complete(Ok(environment.data.take().unwrap()))
+                    environment.completer.take().unwrap().send(Ok(environment.data.take().unwrap()))
                 }
             }
         }, Environment {
             data: Some(dispatchr::data::Managed::retain(dispatchr::data::Unmanaged::new())),
-            completer: Some(completer),
+            completer: Some(sender),
         });
         async {
-            let r = continuation.await;
+            let r = receiver.await;
             r.map(|d| Buffer(Contiguous::new(d))).map_err(|e| DispatchError(e))
         }
     }

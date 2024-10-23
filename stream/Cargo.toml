@@ -11,7 +11,8 @@ priority = {path = "../priority"}
 
 [target.'cfg(target_os="macos")'.dependencies]
 dispatchr = {git = "https://github.com/drewcrawford/dispatchr"}
-blocksr = {git = "https://github.com/drewcrawford/blocksr",features=["continuation"]}
+blocksr = "1"
+continue = ">=0"
 
 [target.'cfg(target_os="windows")'.dependencies]
 once_cell = "1.8.0"
